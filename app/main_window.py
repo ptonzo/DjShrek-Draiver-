@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import sys
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
-    QWidget, QHeaderView, QTabWidget,
+    QWidget, QHeaderView, QTabWidget, QGridLayout, QProgressBar, QFrame,
 )
 from app.export import export_devices_csv
 from app.scanner import Device, ScanError, scan_devices
 from app.windows_update import DriverUpdate, WindowsUpdateError, find_driver_updates, install_driver_update
 from app.driver_backup import DriverBackupError, backup_driver_store, restore_driver_store
+from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot
 
 
 class ScanWorker(QThread):
@@ -20,6 +21,16 @@ class ScanWorker(QThread):
         try:
             self.completed.emit(scan_devices())
         except ScanError as exc:
+            self.failed.emit(str(exc))
+
+
+class TelemetryWorker(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+    def run(self):
+        try:
+            self.completed.emit(collect_system_snapshot())
+        except TelemetryError as exc:
             self.failed.emit(str(exc))
 
 
@@ -46,6 +57,39 @@ class InstallWorker(QThread):
             self.failed.emit(str(exc))
 
 
+class MetricCard(QFrame):
+    def __init__(self, title: str, parent=None):
+        super().__init__(parent)
+        self.setObjectName("metricCard")
+        layout = QVBoxLayout(self)
+        self.heading = QLabel(title.upper())
+        self.heading.setObjectName("metricHeading")
+        self.value = QLabel("—")
+        self.value.setObjectName("metricValue")
+        self.detail = QLabel("Ожидание данных")
+        self.detail.setObjectName("metricDetail")
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 100)
+        self.bar.setValue(0)
+        self.bar.setTextVisible(False)
+        layout.addWidget(self.heading)
+        layout.addWidget(self.value)
+        layout.addWidget(self.bar)
+        layout.addWidget(self.detail)
+
+    def set_metric(self, value: str, percent: float | None, detail: str):
+        self.value.setText(value)
+        self.detail.setText(detail)
+        if percent is None:
+            self.bar.setRange(0, 1)
+            self.bar.setValue(0)
+            self.bar.setFormat("НЕТ ДАННЫХ")
+        else:
+            self.bar.setRange(0, 100)
+            self.bar.setValue(max(0, min(100, int(percent))))
+            self.bar.setFormat("%p%")
+
+
 class MainWindow(QMainWindow):
     device_headers = ["Устройство", "Производитель", "Состояние", "Класс", "Версия драйвера", "Дата драйвера"]
     update_headers = ["Доступный драйвер", "Описание", "Загружен"]
@@ -53,28 +97,133 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("DjShrek Draiver")
-        self.resize(1180, 760)
+        self.resize(1320, 860)
         self.devices: list[Device] = []
         self.updates: list[DriverUpdate] = []
         self.scan_worker = None
+        self.telemetry_worker = None
         self.update_worker = None
         self.install_worker = None
+        self._telemetry_busy = False
+
         root = QWidget()
         layout = QVBoxLayout(root)
+        header = QHBoxLayout()
+        brand = QVBoxLayout()
         title = QLabel("DjShrek Draiver")
         title.setObjectName("title")
-        layout.addWidget(title)
-        layout.addWidget(QLabel("Управление устройствами и обновлениями драйверов Windows"))
+        subtitle = QLabel("NEON GAMING  /  PC CONTROL CENTER")
+        subtitle.setObjectName("subtitle")
+        brand.addWidget(title)
+        brand.addWidget(subtitle)
+        header.addLayout(brand, 1)
+        self.refresh_button = QPushButton("Обновить мониторинг")
+        self.refresh_button.clicked.connect(self.refresh_telemetry)
+        header.addWidget(self.refresh_button)
+        layout.addLayout(header)
+
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs, 1)
+        self.build_dashboard_tab()
+        self.build_devices_tab()
+        self.build_updates_tab()
 
+        self.status = QLabel("Инициализация мониторинга…")
+        self.status.setObjectName("status")
+        layout.addWidget(self.status)
+        self.setCentralWidget(root)
+
+        self.setStyleSheet("""
+            QMainWindow { background: #090d14; }
+            QWidget { color: #e9f2f7; font-size: 10pt; }
+            QLabel#title { font-size: 27pt; font-weight: 800; color: #f4fff9; }
+            QLabel#subtitle { color: #00e5a0; font-size: 9pt; font-weight: 800; letter-spacing: 2px; }
+            QLabel#status { color: #a8bdc7; padding: 9px 12px; background: #111d25; border: 1px solid #1e3940; border-radius: 8px; }
+            QLabel#hint { color: #9eb4bd; padding: 8px 2px; }
+            QLabel#metricHeading { color: #7e9c9e; font-size: 8pt; font-weight: 800; }
+            QLabel#metricValue { color: #eafff7; font-size: 23pt; font-weight: 800; }
+            QLabel#metricDetail { color: #91a9b0; font-size: 9pt; }
+            QLabel#sectionTitle { color: #c9fff0; font-size: 13pt; font-weight: 800; padding: 5px 0; }
+            QFrame#metricCard, QFrame#infoCard { background: #101a23; border: 1px solid #24434a; border-radius: 11px; }
+            QLineEdit, QTableWidget { background: #101a23; border: 1px solid #24404a; border-radius: 8px; padding: 9px; color: #f2fbff; selection-background-color: #00a878; }
+            QLineEdit:focus { border: 1px solid #00e5a0; }
+            QHeaderView::section { background: #142832; color: #baf8e3; padding: 10px; border: 0; border-bottom: 1px solid #245044; font-weight: 700; }
+            QTableWidget { alternate-background-color: #13212a; gridline-color: #203640; }
+            QPushButton { background: #00a878; color: #03130e; border: 0; border-radius: 8px; padding: 11px 15px; font-weight: 800; }
+            QPushButton:hover { background: #00d99a; }
+            QPushButton:pressed { background: #008d66; }
+            QPushButton:disabled { background: #263b3b; color: #829a94; }
+            QProgressBar { background: #1b3035; border: 0; border-radius: 4px; height: 8px; }
+            QProgressBar::chunk { background: #00e5a0; border-radius: 4px; }
+            QTabWidget::pane { border: 1px solid #203c43; border-radius: 10px; top: -1px; background: #0d151d; }
+            QTabBar::tab { background: #111d26; color: #91a8b1; padding: 12px 20px; margin-right: 4px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+            QTabBar::tab:selected { background: #12352f; color: #65ffc5; border-bottom: 2px solid #00e5a0; }
+            QTabBar::tab:hover { color: #ffffff; }
+        """)
+
+        self.telemetry_timer = QTimer(self)
+        self.telemetry_timer.setInterval(2500)
+        self.telemetry_timer.timeout.connect(self.refresh_telemetry)
+        self.telemetry_timer.start()
+        QTimer.singleShot(250, self.refresh_telemetry)
+
+    def build_dashboard_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.addWidget(self.section_label("МОНИТОРИНГ В РЕАЛЬНОМ ВРЕМЕНИ"))
+        grid = QGridLayout()
+        self.cpu_card = MetricCard("Процессор · загрузка")
+        self.memory_card = MetricCard("Оперативная память")
+        self.disk_card = MetricCard("Системный диск")
+        self.gpu_card = MetricCard("Видеокарта")
+        for index, card in enumerate([self.cpu_card, self.memory_card, self.disk_card, self.gpu_card]):
+            grid.addWidget(card, index // 2, index % 2)
+        layout.addLayout(grid)
+
+        layout.addWidget(self.section_label("ОБОРУДОВАНИЕ И СИСТЕМА"))
+        info = QGridLayout()
+        self.info_labels = {}
+        fields = [
+            ("cpu", "Процессор"), ("gpu", "Графика"),
+            ("ram", "Память"), ("os", "Операционная система"),
+            ("disk", "Системный накопитель"), ("uptime", "Время работы"),
+            ("cpu_temp", "Температура ACPI"), ("gpu_temp", "Температура GPU"),
+        ]
+        for index, (key, caption) in enumerate(fields):
+            card = QFrame()
+            card.setObjectName("infoCard")
+            card_layout = QVBoxLayout(card)
+            label = QLabel(caption.upper())
+            label.setObjectName("metricHeading")
+            value = QLabel("Сбор данных…")
+            value.setWordWrap(True)
+            value.setObjectName("metricDetail")
+            card_layout.addWidget(label)
+            card_layout.addWidget(value)
+            self.info_labels[key] = value
+            info.addWidget(card, index // 2, index % 2)
+        layout.addLayout(info)
+        note = QLabel("Температуры отображаются только при наличии поддерживаемого датчика. Отсутствие показаний не означает нулевую температуру.")
+        note.setObjectName("hint")
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        layout.addStretch(1)
+        self.tabs.addTab(tab, "Центр управления")
+
+    @staticmethod
+    def section_label(text: str):
+        label = QLabel(text)
+        label.setObjectName("sectionTitle")
+        return label
+
+    def build_devices_tab(self):
         device_tab = QWidget()
         device_layout = QVBoxLayout(device_tab)
         controls = QHBoxLayout()
         self.device_search = QLineEdit()
         self.device_search.setPlaceholderText("Поиск устройства или производителя…")
         self.device_search.textChanged.connect(self.render_devices)
-        self.scan_button = QPushButton("Сканировать компьютер")
+        self.scan_button = QPushButton("Сканировать устройства")
         self.scan_button.clicked.connect(self.start_scan)
         self.export_button = QPushButton("Экспорт CSV")
         self.export_button.clicked.connect(self.export_csv)
@@ -82,18 +231,16 @@ class MainWindow(QMainWindow):
         self.backup_button.clicked.connect(self.create_driver_backup)
         self.restore_button = QPushButton("Восстановить из копии")
         self.restore_button.clicked.connect(self.restore_driver_backup)
-        controls.addWidget(self.device_search, 1)
-        controls.addWidget(self.scan_button)
-        controls.addWidget(self.export_button)
-        controls.addWidget(self.backup_button)
-        controls.addWidget(self.restore_button)
+        for widget in [self.device_search, self.scan_button, self.export_button, self.backup_button, self.restore_button]:
+            controls.addWidget(widget, 1 if widget is self.device_search else 0)
         device_layout.addLayout(controls)
         self.device_table = QTableWidget(0, len(self.device_headers))
         self.device_table.setHorizontalHeaderLabels(self.device_headers)
         self.configure_table(self.device_table)
         device_layout.addWidget(self.device_table, 1)
-        self.tabs.addTab(device_tab, "Мои устройства")
+        self.tabs.addTab(device_tab, "Устройства и драйверы")
 
+    def build_updates_tab(self):
         update_tab = QWidget()
         update_layout = QVBoxLayout(update_tab)
         update_controls = QHBoxLayout()
@@ -116,25 +263,6 @@ class MainWindow(QMainWindow):
         update_layout.addWidget(note)
         self.tabs.addTab(update_tab, "Обновления драйверов")
 
-        self.status = QLabel("Готово. Выполните сканирование устройств или проверку обновлений.")
-        self.status.setObjectName("status")
-        layout.addWidget(self.status)
-        self.setCentralWidget(root)
-        self.setStyleSheet("""
-            QMainWindow { background: #101827; }
-            QWidget { color: #e8eef8; font-size: 10pt; }
-            QLabel#title { font-size: 25pt; font-weight: 700; color: white; }
-            QLabel#status, QLabel#hint { color: #9fb0c8; padding: 6px 0; }
-            QLineEdit, QTableWidget { background: #172338; border: 1px solid #2d405d; border-radius: 7px; padding: 8px; color: #f2f6fc; }
-            QHeaderView::section { background: #22334d; color: #e8eef8; padding: 8px; border: 0; }
-            QTableWidget { alternate-background-color: #1b2a41; gridline-color: #2b3d58; }
-            QPushButton { background: #2864d7; color: white; border: 0; border-radius: 7px; padding: 10px 14px; font-weight: 600; }
-            QPushButton:hover { background: #3978eb; }
-            QPushButton:disabled { background: #45536a; color: #aab5c4; }
-            QTabBar::tab { background: #1b2a41; padding: 10px 18px; }
-            QTabBar::tab:selected { background: #2864d7; }
-        """)
-
     @staticmethod
     def configure_table(table):
         table.setAlternatingRowColors(True)
@@ -142,6 +270,46 @@ class MainWindow(QMainWindow):
         table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+    def refresh_telemetry(self):
+        if self._telemetry_busy or sys.platform != "win32":
+            return
+        self._telemetry_busy = True
+        self.refresh_button.setEnabled(False)
+        self.telemetry_worker = TelemetryWorker(self)
+        self.telemetry_worker.completed.connect(self.on_telemetry_finished)
+        self.telemetry_worker.failed.connect(self.on_telemetry_failed)
+        self.telemetry_worker.finished.connect(self.on_telemetry_worker_finished)
+        self.telemetry_worker.start()
+
+    def on_telemetry_worker_finished(self):
+        self._telemetry_busy = False
+        self.refresh_button.setEnabled(True)
+
+    def on_telemetry_finished(self, snapshot: SystemSnapshot):
+        self.cpu_card.set_metric(f"{snapshot.cpu_percent:.0f}%", snapshot.cpu_percent, f"{snapshot.cpu_name}")
+        self.memory_card.set_metric(f"{snapshot.memory_percent:.0f}%", snapshot.memory_percent,
+                                    f"{snapshot.memory_used_gb:.1f} / {snapshot.memory_total_gb:.1f} GB")
+        self.disk_card.set_metric(f"{snapshot.disk_percent:.0f}%", snapshot.disk_percent,
+                                  f"{snapshot.disk_used_gb:.0f} / {snapshot.disk_total_gb:.0f} GB · {snapshot.disk_name}")
+        self.gpu_card.set_metric(f"{snapshot.gpu_percent:.0f}%" if snapshot.gpu_percent is not None else "Н/Д",
+                                 snapshot.gpu_percent, snapshot.gpu_name)
+        values = {
+            "cpu": snapshot.cpu_name,
+            "gpu": snapshot.gpu_name,
+            "ram": f"{snapshot.memory_total_gb:.1f} GB",
+            "os": snapshot.os_name,
+            "disk": snapshot.disk_name,
+            "uptime": snapshot.uptime,
+            "cpu_temp": f"{snapshot.cpu_temp_c:.0f} °C (ACPI)" if snapshot.cpu_temp_c is not None else "Нет доступного датчика",
+            "gpu_temp": f"{snapshot.gpu_temp_c:.0f} °C" if snapshot.gpu_temp_c is not None else "Нет доступного датчика",
+        }
+        for key, value in values.items():
+            self.info_labels[key].setText(value or "Не определено")
+        self.status.setText(f"Мониторинг обновлён · {snapshot.timestamp} · обновление каждые 2,5 секунды")
+
+    def on_telemetry_failed(self, message: str):
+        self.status.setText("Мониторинг недоступен: " + message)
 
     def start_scan(self):
         if self.scan_worker is not None and self.scan_worker.isRunning():
