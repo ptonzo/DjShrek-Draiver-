@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtGui import QIcon
+from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
@@ -96,7 +98,10 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DjShrek Draiver")
+        self.setWindowTitle("DjShrek Draiver — Cyber Club Edition")
+        icon_path = Path(__file__).resolve().parent / "assets" / "DjShrek-Draiver.ico"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
         self.resize(1320, 860)
         self.devices: list[Device] = []
         self.updates: list[DriverUpdate] = []
@@ -134,31 +139,31 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
         self.setStyleSheet("""
-            QMainWindow { background: #090d14; }
-            QWidget { color: #e9f2f7; font-size: 10pt; }
-            QLabel#title { font-size: 27pt; font-weight: 800; color: #f4fff9; }
-            QLabel#subtitle { color: #00e5a0; font-size: 9pt; font-weight: 800; letter-spacing: 2px; }
-            QLabel#status { color: #a8bdc7; padding: 9px 12px; background: #111d25; border: 1px solid #1e3940; border-radius: 8px; }
-            QLabel#hint { color: #9eb4bd; padding: 8px 2px; }
-            QLabel#metricHeading { color: #7e9c9e; font-size: 8pt; font-weight: 800; }
-            QLabel#metricValue { color: #eafff7; font-size: 23pt; font-weight: 800; }
-            QLabel#metricDetail { color: #91a9b0; font-size: 9pt; }
-            QLabel#sectionTitle { color: #c9fff0; font-size: 13pt; font-weight: 800; padding: 5px 0; }
-            QFrame#metricCard, QFrame#infoCard { background: #101a23; border: 1px solid #24434a; border-radius: 11px; }
-            QLineEdit, QTableWidget { background: #101a23; border: 1px solid #24404a; border-radius: 8px; padding: 9px; color: #f2fbff; selection-background-color: #00a878; }
-            QLineEdit:focus { border: 1px solid #00e5a0; }
-            QHeaderView::section { background: #142832; color: #baf8e3; padding: 10px; border: 0; border-bottom: 1px solid #245044; font-weight: 700; }
-            QTableWidget { alternate-background-color: #13212a; gridline-color: #203640; }
-            QPushButton { background: #00a878; color: #03130e; border: 0; border-radius: 8px; padding: 11px 15px; font-weight: 800; }
-            QPushButton:hover { background: #00d99a; }
-            QPushButton:pressed { background: #008d66; }
-            QPushButton:disabled { background: #263b3b; color: #829a94; }
-            QProgressBar { background: #1b3035; border: 0; border-radius: 4px; height: 8px; }
-            QProgressBar::chunk { background: #00e5a0; border-radius: 4px; }
-            QTabWidget::pane { border: 1px solid #203c43; border-radius: 10px; top: -1px; background: #0d151d; }
-            QTabBar::tab { background: #111d26; color: #91a8b1; padding: 12px 20px; margin-right: 4px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
-            QTabBar::tab:selected { background: #12352f; color: #65ffc5; border-bottom: 2px solid #00e5a0; }
-            QTabBar::tab:hover { color: #ffffff; }
+            QMainWindow { background: #080817; }
+            QWidget { color: #f2edff; font-size: 10pt; }
+            QLabel#title { font-size: 27pt; font-weight: 900; color: #ffffff; }
+            QLabel#subtitle { color: #31e8ff; font-size: 9pt; font-weight: 900; letter-spacing: 2px; }
+            QLabel#status { color: #d8d0ff; padding: 9px 12px; background: #17142c; border: 1px solid #6738a8; border-radius: 8px; }
+            QLabel#hint { color: #b8afd6; padding: 8px 2px; }
+            QLabel#metricHeading { color: #b8a7e8; font-size: 8pt; font-weight: 800; }
+            QLabel#metricValue { color: #ffffff; font-size: 23pt; font-weight: 900; }
+            QLabel#metricDetail { color: #c3b9df; font-size: 9pt; }
+            QLabel#sectionTitle { color: #ff70df; font-size: 13pt; font-weight: 900; padding: 5px 0; }
+            QFrame#metricCard, QFrame#infoCard { background: #151329; border: 1px solid #6636a6; border-radius: 11px; }
+            QLineEdit, QTableWidget { background: #151329; border: 1px solid #50327e; border-radius: 8px; padding: 9px; color: #ffffff; selection-background-color: #7c35d8; }
+            QLineEdit:focus { border: 1px solid #2de7ff; }
+            QHeaderView::section { background: #24183d; color: #ffc5f3; padding: 10px; border: 0; border-bottom: 2px solid #ed36bd; font-weight: 800; }
+            QTableWidget { alternate-background-color: #1d1834; gridline-color: #382653; }
+            QPushButton { background: #7b35d8; color: #ffffff; border: 1px solid #b45cff; border-radius: 8px; padding: 11px 15px; font-weight: 900; }
+            QPushButton:hover { background: #a23cff; border-color: #35eaff; }
+            QPushButton:pressed { background: #5420a4; }
+            QPushButton:disabled { background: #302846; color: #9185aa; border-color: #49365f; }
+            QProgressBar { background: #29203d; border: 1px solid #563778; border-radius: 4px; height: 8px; color: #ffffff; }
+            QProgressBar::chunk { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #27dfff,stop:1 #f13ac8); border-radius: 4px; }
+            QTabWidget::pane { border: 1px solid #563778; border-radius: 10px; top: -1px; background: #100e20; }
+            QTabBar::tab { background: #1a1630; color: #b7a9d8; padding: 12px 20px; margin-right: 4px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+            QTabBar::tab:selected { background: #3a1e5d; color: #ffffff; border-bottom: 3px solid #2de7ff; }
+            QTabBar::tab:hover { color: #ff8ee5; }
         """)
 
         self.telemetry_timer = QTimer(self)
