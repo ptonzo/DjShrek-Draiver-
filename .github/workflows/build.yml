@@ -46,7 +46,7 @@ for x,h in [(145,35),(190,54),(235,82),(280,54),(325,35)]:
  d.rounded_rectangle((x,410-h,x+25,410),radius=6,fill=(0,210,255,255))
 d.polygon([(256,340),(221,380),(244,380),(244,421),(268,421),(268,380),(291,380)],fill=(0,220,255,255))
 im.save("assets/DjShrek-Draiver.ico",format="ICO",sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
-'@ | Set-Content -Encoding utf8 make_icon.py
+          '@ | Set-Content -Encoding utf8 make_icon.py
           python make_icon.py
           if (!(Test-Path "assets/DjShrek-Draiver.ico")) { throw "ICO icon was not created" }
       - name: Build application
