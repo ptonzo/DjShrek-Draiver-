@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from app.export import export_devices_csv
 from app.scanner import Device, ScanError, scan_devices
 from app.windows_update import DriverUpdate, WindowsUpdateError, find_driver_updates, install_driver_update
+from app.driver_backup import DriverBackupError, backup_driver_store, restore_driver_store
 
 
 class ScanWorker(QThread):
@@ -77,9 +78,15 @@ class MainWindow(QMainWindow):
         self.scan_button.clicked.connect(self.start_scan)
         self.export_button = QPushButton("Экспорт CSV")
         self.export_button.clicked.connect(self.export_csv)
+        self.backup_button = QPushButton("Создать копию драйверов")
+        self.backup_button.clicked.connect(self.create_driver_backup)
+        self.restore_button = QPushButton("Восстановить из копии")
+        self.restore_button.clicked.connect(self.restore_driver_backup)
         controls.addWidget(self.device_search, 1)
         controls.addWidget(self.scan_button)
         controls.addWidget(self.export_button)
+        controls.addWidget(self.backup_button)
+        controls.addWidget(self.restore_button)
         device_layout.addLayout(controls)
         self.device_table = QTableWidget(0, len(self.device_headers))
         self.device_table.setHorizontalHeaderLabels(self.device_headers)
@@ -184,6 +191,39 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка экспорта", str(exc))
             return
         self.status.setText(f"Список сохранён: {filename}")
+
+    def create_driver_backup(self):
+        folder = QFileDialog.getExistingDirectory(self, "Выберите пустую папку для резервной копии")
+        if not folder:
+            return
+        try:
+            target, count = backup_driver_store(folder)
+        except DriverBackupError as exc:
+            QMessageBox.warning(self, "Резервная копия", str(exc))
+            return
+        self.status.setText(f"Экспортировано пакетов драйверов: {count}. Папка: {target}")
+        QMessageBox.information(self, "Резервная копия", f"Скопировано пакетов драйверов: {count}\\n\\n{target}")
+
+    def restore_driver_backup(self):
+        folder = QFileDialog.getExistingDirectory(self, "Выберите папку резервной копии")
+        if not folder:
+            return
+        answer = QMessageBox.warning(
+            self, "Подтверждение восстановления",
+            "Добавить драйверы из выбранной копии в Driver Store? Windows может заменить драйверы устройств.\\n\\n"
+            "Рекомендуется закрыть программы и заранее создать точку восстановления Windows.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            message = restore_driver_store(folder)
+        except DriverBackupError as exc:
+            QMessageBox.warning(self, "Восстановление драйверов", str(exc))
+            return
+        self.status.setText("Команда восстановления выполнена. " + message[:300])
+        QMessageBox.information(self, "Восстановление драйверов", message or "Команда восстановления выполнена.")
 
     def start_update_search(self):
         if sys.platform != "win32":
