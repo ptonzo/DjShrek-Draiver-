@@ -15,6 +15,7 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 DisableProgramGroupPage=yes
+ShowLanguageDialog=no
 Uninstallable=yes
 CloseApplications=yes
 RestartApplications=no
