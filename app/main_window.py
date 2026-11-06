@@ -11,7 +11,7 @@ from app.export import export_devices_csv
 from app.scanner import Device, ScanError, scan_devices
 from app.windows_update import DriverUpdate, WindowsUpdateError, find_driver_updates, install_driver_update
 from app.driver_backup import DriverBackupError, backup_driver_store, restore_driver_store
-from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot
+from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot\nfrom app.driver_sources import source_for_device, open_official_source
 
 
 class ScanWorker(QThread):
@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DjShrek Draiver")
+        self.setWindowTitle("DjShrek-Draiver Cyber Club")
         self.resize(1320, 860)
         self.devices: list[Device] = []
         self.updates: list[DriverUpdate] = []
@@ -110,7 +110,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(root)
         header = QHBoxLayout()
         brand = QVBoxLayout()
-        title = QLabel("DjShrek Draiver")
+        title = QLabel("DjShrek-Draiver Cyber Club")
         title.setObjectName("title")
         subtitle = QLabel("NEON GAMING  /  PC CONTROL CENTER")
         subtitle.setObjectName("subtitle")
@@ -136,28 +136,28 @@ class MainWindow(QMainWindow):
         self.setStyleSheet("""
             QMainWindow { background: #090d14; }
             QWidget { color: #e9f2f7; font-size: 10pt; }
-            QLabel#title { font-size: 27pt; font-weight: 800; color: #f4fff9; }
-            QLabel#subtitle { color: #00e5a0; font-size: 9pt; font-weight: 800; letter-spacing: 2px; }
-            QLabel#status { color: #a8bdc7; padding: 9px 12px; background: #111d25; border: 1px solid #1e3940; border-radius: 8px; }
-            QLabel#hint { color: #9eb4bd; padding: 8px 2px; }
-            QLabel#metricHeading { color: #7e9c9e; font-size: 8pt; font-weight: 800; }
-            QLabel#metricValue { color: #eafff7; font-size: 23pt; font-weight: 800; }
-            QLabel#metricDetail { color: #91a9b0; font-size: 9pt; }
+            QLabel#title { font-size: 27pt; font-weight: 800; color: #ffffff; }
+            QLabel#subtitle { color: #00e5ff; font-size: 9pt; font-weight: 800; letter-spacing: 2px; }
+            QLabel#status { color: #b9b3d9; padding: 9px 12px; background: #111d25; border: 1px solid #1e3940; border-radius: 8px; }
+            QLabel#hint { color: #b4b1d6; padding: 8px 2px; }
+            QLabel#metricHeading { color: #9e91c9; font-size: 8pt; font-weight: 800; }
+            QLabel#metricValue { color: #f7f1ff; font-size: 23pt; font-weight: 800; }
+            QLabel#metricDetail { color: #a7a9c9; font-size: 9pt; }
             QLabel#sectionTitle { color: #c9fff0; font-size: 13pt; font-weight: 800; padding: 5px 0; }
-            QFrame#metricCard, QFrame#infoCard { background: #101a23; border: 1px solid #24434a; border-radius: 11px; }
-            QLineEdit, QTableWidget { background: #101a23; border: 1px solid #24404a; border-radius: 8px; padding: 9px; color: #f2fbff; selection-background-color: #00a878; }
+            QFrame#metricCard, QFrame#infoCard { background: #121629; border: 1px solid #4a3471; border-radius: 11px; }
+            QLineEdit, QTableWidget { background: #101a23; border: 1px solid #24404a; border-radius: 8px; padding: 9px; color: #f2fbff; selection-background-color: #8b5cf6; }
             QLineEdit:focus { border: 1px solid #00e5a0; }
-            QHeaderView::section { background: #142832; color: #baf8e3; padding: 10px; border: 0; border-bottom: 1px solid #245044; font-weight: 700; }
-            QTableWidget { alternate-background-color: #13212a; gridline-color: #203640; }
+            QHeaderView::section { background: #20233d; color: #baf8e3; padding: 10px; border: 0; border-bottom: 1px solid #5a3c88; font-weight: 700; }
+            QTableWidget { alternate-background-color: #1a1d35; gridline-color: #2e3152; }
             QPushButton { background: #00a878; color: #03130e; border: 0; border-radius: 8px; padding: 11px 15px; font-weight: 800; }
-            QPushButton:hover { background: #00d99a; }
-            QPushButton:pressed { background: #008d66; }
-            QPushButton:disabled { background: #263b3b; color: #829a94; }
-            QProgressBar { background: #1b3035; border: 0; border-radius: 4px; height: 8px; }
+            QPushButton:hover { background: #00f0ff; }
+            QPushButton:pressed { background: #6538d8; }
+            QPushButton:disabled { background: #333052; color: #a69bbd; }
+            QProgressBar { background: #1b2338; border: 0; border-radius: 4px; height: 8px; }
             QProgressBar::chunk { background: #00e5a0; border-radius: 4px; }
-            QTabWidget::pane { border: 1px solid #203c43; border-radius: 10px; top: -1px; background: #0d151d; }
-            QTabBar::tab { background: #111d26; color: #91a8b1; padding: 12px 20px; margin-right: 4px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
-            QTabBar::tab:selected { background: #12352f; color: #65ffc5; border-bottom: 2px solid #00e5a0; }
+            QTabWidget::pane { border: 1px solid #39305f; border-radius: 10px; top: -1px; background: #0d151d; }
+            QTabBar::tab { background: #15172b; color: #91a8b1; padding: 12px 20px; margin-right: 4px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+            QTabBar::tab:selected { background: #241b3b; color: #d7a8ff; border-bottom: 2px solid #00e5a0; }
             QTabBar::tab:hover { color: #ffffff; }
         """)
 
@@ -244,20 +244,18 @@ class MainWindow(QMainWindow):
         update_tab = QWidget()
         update_layout = QVBoxLayout(update_tab)
         update_controls = QHBoxLayout()
-        self.update_search_button = QPushButton("Проверить обновления Windows")
+        self.update_search_button = QPushButton("Проверить наличие обновлений драйверов")
         self.update_search_button.clicked.connect(self.start_update_search)
-        self.install_button = QPushButton("Установить выбранный драйвер")
-        self.install_button.clicked.connect(self.install_selected)
-        self.install_button.setEnabled(False)
         update_controls.addWidget(self.update_search_button)
-        update_controls.addWidget(self.install_button)
         update_layout.addLayout(update_controls)
-        self.update_table = QTableWidget(0, len(self.update_headers))
-        self.update_table.setHorizontalHeaderLabels(self.update_headers)
+        self.update_table = QTableWidget(0, 6)
+        self.update_table.setHorizontalHeaderLabels([
+            "Устройство", "Производитель", "Версия драйвера", "Дата драйвера",
+            "Официальный источник", "Переход"
+        ])
         self.configure_table(self.update_table)
-        self.update_table.itemSelectionChanged.connect(self.on_update_selection)
         update_layout.addWidget(self.update_table, 1)
-        note = QLabel("Обновления поступают через Windows Update. Установка запускается только после выбора и подтверждения.")
+        note = QLabel("Поиск Windows Update отключён. DjShrek показывает установленные версии и направляет к официальным сайтам производителей. Загрузка и установка выполняются только из официальных утилит/каталогов производителя; неизвестные зеркала не используются.")
         note.setWordWrap(True)
         note.setObjectName("hint")
         update_layout.addWidget(note)
@@ -395,59 +393,49 @@ class MainWindow(QMainWindow):
 
     def start_update_search(self):
         if sys.platform != "win32":
-            QMessageBox.information(self, "Windows Update", "Проверка доступна только в Windows 10/11.")
+            QMessageBox.information(self, "Драйверы", "Проверка доступна только в Windows 10/11.")
             return
         if self.update_worker is not None and self.update_worker.isRunning():
             return
         self.update_search_button.setEnabled(False)
-        self.install_button.setEnabled(False)
-        self.status.setText("Поиск драйверов через Windows Update…")
-        self.update_worker = UpdateSearchWorker(self)
+        self.status.setText("Сканирование установленных драйверов и определение официальных источников…")
+        self.update_worker = ScanWorker(self)
         self.update_worker.completed.connect(self.on_updates_found)
         self.update_worker.failed.connect(self.on_update_error)
         self.update_worker.finished.connect(lambda: self.update_search_button.setEnabled(True))
         self.update_worker.start()
 
-    def on_updates_found(self, updates):
-        self.updates = updates
-        self.update_table.setRowCount(len(updates))
-        for row, update in enumerate(updates):
-            for col, value in enumerate([update.title, update.description, "Да" if update.downloaded else "Нет"]):
-                self.update_table.setItem(row, col, QTableWidgetItem(value))
-        self.status.setText(f"Windows Update обнаружил драйверов: {len(updates)}.")
-        if not updates:
-            QMessageBox.information(self, "Обновления драйверов", "Доступные обновления драйверов не найдены.")
-
-    def on_update_selection(self):
-        self.install_button.setEnabled(self.update_table.currentRow() >= 0 and bool(self.updates))
-
-    def install_selected(self):
-        row = self.update_table.currentRow()
-        if row < 0 or row >= len(self.updates):
-            return
-        update = self.updates[row]
-        answer = QMessageBox.warning(
-            self, "Подтверждение установки",
-            "Установить драйвер через Windows Update?\n\n" + update.title +
-            "\n\nЗакройте важные программы. Некоторым обновлениям потребуется перезагрузка.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
+    def on_updates_found(self, devices):
+        self.devices = devices
+        self.render_devices()
+        self.update_table.setRowCount(len(devices))
+        for row, device in enumerate(devices):
+            source = source_for_device(device)
+            values = [
+                device.name,
+                device.manufacturer or device.driver_provider or "Не определён",
+                device.driver_version or "Нет данных",
+                device.driver_date or "Нет данных",
+                source.name if source else "Производитель не поддержан",
+            ]
+            for col, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setToolTip(value)
+                self.update_table.setItem(row, col, item)
+            if source:
+                action = QPushButton("Открыть официальный сайт")
+                action.setToolTip(source.method)
+                action.clicked.connect(lambda checked=False, url=source.url: open_official_source(url))
+                self.update_table.setCellWidget(row, 5, action)
+            else:
+                self.update_table.setItem(row, 5, QTableWidgetItem("Нет ссылки"))
+        self.update_table.resizeRowsToContents()
+        self.status.setText(
+            f"Проверено устройств: {len(devices)}. Версии и даты считаны из подписанных драйверов Windows. "
+            "Наличие новой версии подтверждается на сайте производителя."
         )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-        self.install_button.setEnabled(False)
-        self.update_search_button.setEnabled(False)
-        self.status.setText("Загрузка и установка: " + update.title)
-        self.install_worker = InstallWorker(update, self)
-        self.install_worker.completed.connect(self.on_install_finished)
-        self.install_worker.failed.connect(self.on_update_error)
-        self.install_worker.finished.connect(lambda: self.update_search_button.setEnabled(True))
-        self.install_worker.start()
-
-    def on_install_finished(self, message):
-        self.status.setText(message)
-        QMessageBox.information(self, "Windows Update", message)
-        self.start_update_search()
+        if not devices:
+            QMessageBox.information(self, "Драйверы", "Устройства не обнаружены.")
 
     def on_update_error(self, message):
         self.status.setText("Операция Windows Update не завершена.")
