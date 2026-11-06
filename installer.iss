@@ -30,10 +30,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Registry]
 ; Reserve a writable per-machine location for the DPAPI-protected entitlement.
 ; uninsneveruninstall is intentional: uninstall must not erase a paid license.
-Root: HKLM; Subkey: "Software\\DjShrek\\CyberClub\\License"; Flags: uninsneveruninstall; Permissions: users-modify
+Root: HKLM; Subkey: "Software\DjShrek\CyberClub\License"; Flags: uninsneveruninstall; Permissions: users-modify
 
 ; Launch at Windows sign-in. This Run value is removed by normal uninstall.
-Root: HKCU; Subkey: "Software\\Microsoft\\Windows\\CurrentVersion\\Run"; ValueType: string; ValueName: "DjShrek-Draiver Cyber Club"; ValueData: """{app}\\DjShrek-Draiver Cyber Club.exe"""; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DjShrek-Draiver Cyber Club"; ValueData: """{app}\DjShrek-Draiver Cyber Club.exe"""; Flags: uninsdeletevalue
 
 [Tasks]
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные параметры:"; Flags: unchecked
