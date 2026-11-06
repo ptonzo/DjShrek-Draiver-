@@ -16,6 +16,7 @@ from app.driver_sources import source_for_device, open_official_source
 from app.vendor_utilities import detect_vendor_utilities, open_vendor_scan_page, scan_dell_updates
 from app.i18n import LANGUAGES, system_language, translate
 from app.updater import check_latest_release, download_and_schedule, UpdateError
+from app.registry_checker import RegistryFinding, scan_registry, repair_stale_startup_entry
 
 
 class ScanWorker(QThread):
@@ -140,6 +141,7 @@ class MainWindow(QMainWindow):
         self.build_dashboard_tab()
         self.build_devices_tab()
         self.build_updates_tab()
+        self.build_registry_tab()
         self.build_settings_tab()
 
         self.status = QLabel("Инициализация мониторинга…")
@@ -324,6 +326,114 @@ class MainWindow(QMainWindow):
     def on_app_update_check_failed(self, message):
         self.status.setText("Не удалось проверить обновления программы.")
         self.event_log.appendPlainText(message)
+
+    def build_registry_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.addWidget(self.section_label("ДИАГНОСТИКА РЕЕСТРА WINDOWS"))
+        note = QLabel(
+            "Проверяются записи автозапуска Run и RunOnce (HKCU/HKLM). "
+            "Сканирование не изменяет реестр. Автоматическое исправление доступно "
+            "только для записи, указывающей на отсутствующий EXE-файл; перед удалением "
+            "создаётся .reg резервная копия. Остальные подозрительные записи требуют ручной проверки."
+        )
+        note.setWordWrap(True)
+        note.setObjectName("hint")
+        layout.addWidget(note)
+        controls = QHBoxLayout()
+        self.registry_scan_button = QPushButton("Проверить реестр")
+        self.registry_scan_button.clicked.connect(self.start_registry_scan)
+        self.registry_fix_button = QPushButton("Исправить выбранную ошибку")
+        self.registry_fix_button.setEnabled(False)
+        self.registry_fix_button.clicked.connect(self.fix_selected_registry_finding)
+        controls.addWidget(self.registry_scan_button)
+        controls.addWidget(self.registry_fix_button)
+        layout.addLayout(controls)
+        self.registry_table = QTableWidget(0, 5)
+        self.registry_table.setHorizontalHeaderLabels(["Статус", "Раздел", "Имя записи", "Данные", "Результат проверки"])
+        self.configure_table(self.registry_table)
+        self.registry_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.registry_table.itemSelectionChanged.connect(self.on_registry_selection_changed)
+        layout.addWidget(self.registry_table, 1)
+        self.registry_findings: list[RegistryFinding] = []
+        self.tabs.addTab(tab, "Проверка реестра")
+
+    def start_registry_scan(self):
+        if sys.platform != "win32":
+            QMessageBox.information(self, "Проверка реестра", "Функция доступна только в Windows 10/11.")
+            return
+        self.registry_scan_button.setEnabled(False)
+        self.registry_fix_button.setEnabled(False)
+        self.registry_table.setRowCount(0)
+        self.status.setText("Проверка записей автозапуска Windows…")
+        try:
+            self.registry_findings = scan_registry()
+        except OSError as exc:
+            self.registry_scan_button.setEnabled(True)
+            QMessageBox.warning(self, "Проверка реестра", str(exc))
+            return
+        self.render_registry_findings()
+        self.registry_scan_button.setEnabled(True)
+        errors = sum(1 for item in self.registry_findings if item.severity == "Ошибка")
+        self.status.setText(
+            f"Проверка завершена. Найдено замечаний: {len(self.registry_findings)}, "
+            f"подтверждённых ошибок: {errors}. Реестр не изменялся."
+        )
+        self.event_log.appendPlainText(
+            f"Проверка реестра: замечаний {len(self.registry_findings)}, ошибок {errors}; изменений не выполнялось."
+        )
+
+    def render_registry_findings(self):
+        self.registry_table.setRowCount(len(self.registry_findings))
+        for row, finding in enumerate(self.registry_findings):
+            values = [
+                finding.severity,
+                finding.hive + "\\" + finding.subkey,
+                finding.value_name or "—",
+                finding.value_data or "—",
+                finding.issue,
+            ]
+            for col, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setToolTip(value)
+                self.registry_table.setItem(row, col, item)
+        self.registry_table.resizeRowsToContents()
+        if not self.registry_findings:
+            self.registry_table.setRowCount(1)
+            self.registry_table.setItem(0, 0, QTableWidgetItem("OK"))
+            self.registry_table.setItem(0, 4, QTableWidgetItem("Подозрительных записей автозапуска не обнаружено."))
+
+    def on_registry_selection_changed(self):
+        row = self.registry_table.currentRow()
+        can_fix = 0 <= row < len(self.registry_findings) and self.registry_findings[row].repairable
+        self.registry_fix_button.setEnabled(bool(can_fix))
+
+    def fix_selected_registry_finding(self):
+        row = self.registry_table.currentRow()
+        if not (0 <= row < len(self.registry_findings)):
+            return
+        finding = self.registry_findings[row]
+        if not finding.repairable:
+            QMessageBox.information(self, "Исправление", "Для этой записи автоматическое исправление не поддерживается.")
+            return
+        answer = QMessageBox.warning(
+            self, "Подтверждение исправления",
+            f"Программа обнаружила отсутствующий файл автозапуска. Удалить только эту запись?\n\n"
+            f"Раздел: {finding.hive}\\{finding.subkey}\n"
+            f"Имя: {finding.value_name}\nДанные: {finding.value_data}\n\n"
+            "Перед изменением будет экспортирована резервная копия раздела реестра.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            backup = repair_stale_startup_entry(finding)
+        except (OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.critical(self, "Исправление реестра", str(exc))
+            return
+        QMessageBox.information(self, "Исправление выполнено", f"Запись удалена. Резервная копия:\n{backup}")
+        self.start_registry_scan()
 
     def build_settings_tab(self):
         tab = QWidget()
