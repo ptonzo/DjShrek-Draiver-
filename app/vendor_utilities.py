@@ -8,7 +8,10 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 import webbrowser
-import winreg
+try:
+    import winreg
+except ImportError:  # Non-Windows test runners
+    winreg = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +31,7 @@ OFFICIAL_URLS = {
 
 
 def _installed_app_names() -> list[str]:
-    if sys.platform != "win32":
+    if sys.platform != "win32" or winreg is None:
         return []
     names: list[str] = []
     locations = (
@@ -67,7 +70,7 @@ def _find_dell_cli() -> str:
 
 def detect_vendor_utilities() -> list[VendorUtility]:
     """Detect installed OEM utilities without downloading or running installers."""
-    if sys.platform != "win32":
+    if sys.platform != "win32" or winreg is None:
         return [
             VendorUtility("intel", "Intel Driver & Support Assistant", OFFICIAL_URLS["intel"], False),
             VendorUtility("amd", "AMD Auto-Detect / AMD Software", OFFICIAL_URLS["amd"], False),
@@ -75,11 +78,6 @@ def detect_vendor_utilities() -> list[VendorUtility]:
         ]
     names = [name.casefold() for name in _installed_app_names()]
     try:
-        subprocess.run(
-            ["sc.exe", "query", "DSAService"],
-            capture_output=True, timeout=8, check=False,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
         intel_service = subprocess.run(
             ["sc.exe", "query", "DSAService"], capture_output=True, timeout=8,
             check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
