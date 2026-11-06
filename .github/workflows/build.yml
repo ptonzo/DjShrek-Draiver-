@@ -1,0 +1,22 @@
+name: Build Windows executable
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements-dev.txt
+      - run: pyinstaller --noconfirm --clean --windowed --name "DjShrek Draiver" --collect-all PySide6 run.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DjShrek-Draiver-Windows
+          path: dist/
