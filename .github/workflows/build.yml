@@ -18,8 +18,10 @@ jobs:
           python-version: "3.12"
       - name: Install Python dependencies
         run: python -m pip install -r requirements-dev.txt
+      - name: Generate Cyber Club icons
+        run: python scripts/generate_brand_assets.py
       - name: Build application
-        run: pyinstaller --noconfirm --clean --windowed --onedir --name "DjShrek Draiver" --collect-all PySide6 run.py
+        run: pyinstaller --noconfirm --clean --windowed --onedir --name "DjShrek Draiver" --icon assets/DjShrek-Draiver.ico --add-data "assets;assets" --collect-all PySide6 run.py
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build single-file installer
