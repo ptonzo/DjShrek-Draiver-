@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import sys
 from datetime import datetime
-from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSettings
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
-    QWidget, QHeaderView, QTabWidget, QGridLayout, QProgressBar, QFrame, QPlainTextEdit,
+    QWidget, QHeaderView, QTabWidget, QGridLayout, QProgressBar, QFrame, QPlainTextEdit, QComboBox,
 )
 from app.export import export_devices_csv
 from app.scanner import Device, ScanError, scan_devices
@@ -14,6 +14,7 @@ from app.driver_backup import DriverBackupError, backup_driver_store, restore_dr
 from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot
 from app.driver_sources import source_for_device, open_official_source
 from app.vendor_utilities import detect_vendor_utilities, open_vendor_scan_page, scan_dell_updates
+from app.i18n import LANGUAGES, system_language, translate
 
 
 class ScanWorker(QThread):
@@ -90,6 +91,10 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.settings_store = QSettings("DjShrek", "CyberClub")
+        self.language = self.settings_store.value("language", system_language(), type=str)
+        if self.language not in LANGUAGES:
+            self.language = system_language()
         self.setWindowTitle("DjShrek-Draiver Cyber Club")
         self.resize(1320, 860)
         self.devices: list[Device] = []
@@ -121,11 +126,13 @@ class MainWindow(QMainWindow):
         self.build_dashboard_tab()
         self.build_devices_tab()
         self.build_updates_tab()
+        self.build_settings_tab()
 
         self.status = QLabel("Инициализация мониторинга…")
         self.status.setObjectName("status")
         layout.addWidget(self.status)
         self.setCentralWidget(root)
+        self.apply_language()
 
         self.setStyleSheet("""
             QMainWindow { background: #070812; }
@@ -263,6 +270,65 @@ class MainWindow(QMainWindow):
         note.setObjectName("hint")
         update_layout.addWidget(note)
         self.tabs.addTab(update_tab, "Обновления драйверов")
+
+
+    def build_settings_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.addWidget(self.section_label("Настройки"))
+        row = QHBoxLayout()
+        label = QLabel("Язык интерфейса")
+        self.language_combo = QComboBox()
+        for code, native_name in LANGUAGES.items():
+            self.language_combo.addItem(native_name, code)
+        index = self.language_combo.findData(self.language)
+        self.language_combo.setCurrentIndex(max(0, index))
+        self.language_combo.currentIndexChanged.connect(self.change_language)
+        row.addWidget(label)
+        row.addWidget(self.language_combo, 1)
+        layout.addLayout(row)
+        hint = QLabel("Изменение языка применяется сразу.")
+        hint.setObjectName("hint")
+        layout.addWidget(hint)
+        layout.addStretch(1)
+        self.tabs.addTab(tab, "Настройки")
+
+    def change_language(self, index):
+        code = self.language_combo.itemData(index)
+        if code not in LANGUAGES:
+            return
+        self.language = code
+        self.settings_store.setValue("language", code)
+        self.apply_language()
+
+    def apply_language(self):
+        for widget in self.findChildren(QLabel) + self.findChildren(QPushButton):
+            if widget.property("_i18n_source") is None:
+                widget.setProperty("_i18n_source", widget.text())
+            widget.setText(translate(self.language, widget.property("_i18n_source")))
+        for widget in self.findChildren(QLineEdit):
+            if widget.property("_i18n_placeholder") is None:
+                widget.setProperty("_i18n_placeholder", widget.placeholderText())
+            widget.setPlaceholderText(translate(self.language, widget.property("_i18n_placeholder")))
+        tab_sources = self.tabs.property("_i18n_tabs")
+        if tab_sources is None:
+            tab_sources = [self.tabs.tabText(i) for i in range(self.tabs.count())]
+            self.tabs.setProperty("_i18n_tabs", tab_sources)
+        for i, source in enumerate(tab_sources):
+            self.tabs.setTabText(i, translate(self.language, source))
+        table_headers = [
+            (self.device_table, self.device_headers),
+            (self.update_table, ["Устройство", "Производитель", "Версия драйвера", "Дата драйвера", "Официальный источник", "Переход"]),
+        ]
+        for table, headers in table_headers:
+            for col, source in enumerate(headers):
+                item = table.horizontalHeaderItem(col)
+                if item:
+                    item.setText(translate(self.language, source))
+        if hasattr(self, "language_combo"):
+            self.language_combo.blockSignals(True)
+            self.language_combo.setCurrentIndex(max(0, self.language_combo.findData(self.language)))
+            self.language_combo.blockSignals(False)
 
     @staticmethod
     def configure_table(table):
