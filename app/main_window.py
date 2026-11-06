@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
 )
 from app.export import export_devices_csv
 from app.scanner import Device, ScanError, scan_devices
-from app.windows_update import DriverUpdate, WindowsUpdateError, find_driver_updates, install_driver_update
 from app.driver_backup import DriverBackupError, backup_driver_store, restore_driver_store
 from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot
 from app.driver_sources import source_for_device, open_official_source
@@ -32,29 +31,6 @@ class TelemetryWorker(QThread):
         try:
             self.completed.emit(collect_system_snapshot())
         except TelemetryError as exc:
-            self.failed.emit(str(exc))
-
-
-class UpdateSearchWorker(QThread):
-    completed = Signal(object)
-    failed = Signal(str)
-    def run(self):
-        try:
-            self.completed.emit(find_driver_updates())
-        except WindowsUpdateError as exc:
-            self.failed.emit(str(exc))
-
-
-class InstallWorker(QThread):
-    completed = Signal(str)
-    failed = Signal(str)
-    def __init__(self, update: DriverUpdate, parent=None):
-        super().__init__(parent)
-        self.update_item = update
-    def run(self):
-        try:
-            self.completed.emit(install_driver_update(self.update_item.update_id, self.update_item.revision))
-        except WindowsUpdateError as exc:
             self.failed.emit(str(exc))
 
 
