@@ -75,7 +75,7 @@ def scan_registry() -> list[RegistryFinding]:
                     expanded = os.path.expandvars(target.strip().strip('"'))
                     # Shell built-ins, protocol handlers and environment-based commands
                     # are intentionally not classified as broken executable paths.
-                    if expanded.startswith(("\\\\", "shell:", "ms-settings:", "http:", "https:")):
+                    if expanded.startswith(("\\", "shell:", "ms-settings:", "http:", "https:")):
                         continue
                     if not os.path.isabs(expanded):
                         findings.append(RegistryFinding(
@@ -120,7 +120,7 @@ def repair_stale_startup_entry(finding: RegistryFinding) -> str:
     safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", finding.value_name)[:48] or "startup"
     backup_file = backup_dir / f"registry-{finding.hive}-{safe_name}.reg"
     root = "HKEY_CURRENT_USER" if finding.hive == "HKCU" else "HKEY_LOCAL_MACHINE"
-    full_key = root + "\\\\" + finding.subkey
+    full_key = root + "\\" + finding.subkey
     result = subprocess.run(
         ["reg.exe", "export", full_key, str(backup_file), "/y"],
         capture_output=True, text=True, check=False
