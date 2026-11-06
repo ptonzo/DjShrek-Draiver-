@@ -1,3 +1,5 @@
+#pragma code_page=65001
+
 [Setup]
 AppId={{B5C90D4B-12F1-4D89-A3B4-9B6E5C0A2D17}
 AppName=DjShrek-Draiver Cyber Club
