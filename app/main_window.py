@@ -202,7 +202,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Резервная копия", str(exc))
             return
         self.status.setText(f"Экспортировано пакетов драйверов: {count}. Папка: {target}")
-        QMessageBox.information(self, "Резервная копия", f"Скопировано пакетов драйверов: {count}\\n\\n{target}")
+        QMessageBox.information(self, "Резервная копия", f"Скопировано пакетов драйверов: {count}\n\n{target}")
 
     def restore_driver_backup(self):
         folder = QFileDialog.getExistingDirectory(self, "Выберите папку резервной копии")
@@ -210,7 +210,7 @@ class MainWindow(QMainWindow):
             return
         answer = QMessageBox.warning(
             self, "Подтверждение восстановления",
-            "Добавить драйверы из выбранной копии в Driver Store? Windows может заменить драйверы устройств.\\n\\n"
+            "Добавить драйверы из выбранной копии в Driver Store? Windows может заменить драйверы устройств.\n\n"
             "Рекомендуется закрыть программы и заранее создать точку восстановления Windows.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
