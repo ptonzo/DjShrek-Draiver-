@@ -37,6 +37,12 @@ Official sources currently mapped:
 - NVIDIA load/temperature via `nvidia-smi`, if installed.
 - ACPI temperature only when firmware exposes a supported sensor; unavailable values are never fabricated.
 
+### Registry diagnostics and cleanup
+
+- **Проверка реестра** currently scans the Windows Run/RunOnce startup locations in HKCU and HKLM. The scan is read-only. Automatic repair is limited to a confirmed missing executable in the current user's startup entries (HKCU); a .reg backup is exported before the selected value is removed. Machine-wide HKLM findings are report-only because repair requires elevation.
+- **Очистка компьютера** scans the current user's temporary directory and Windows Temp for files older than seven days. The user reviews the categories and confirms cleanup. Files that are locked, changed since the scan, inaccessible, symbolic links, or reparse points are skipped.
+- Personal folders, Downloads, browser profiles, cookies, saved passwords, documents and photos are not scanned or deleted. This is a conservative temporary-file cleanup, not a full disk optimizer.
+
 ## Build and test
 
 Requirements: Windows 10/11 x64, Python 3.12 for CI/development.
