@@ -18,8 +18,8 @@ DisableProgramGroupPage=yes
 Uninstallable=yes
 CloseApplications=yes
 RestartApplications=no
-SetupIconFile=assets\\DjShrek-Draiver.ico
-UninstallDisplayIcon={app}\\DjShrek Draiver.exe
+SetupIconFile=assets\DjShrek-Draiver.ico
+UninstallDisplayIcon={app}\DjShrek Draiver.exe
 LicenseFile=LICENSE.rtf
 
 [Languages]
