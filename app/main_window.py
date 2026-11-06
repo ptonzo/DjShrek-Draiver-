@@ -13,6 +13,7 @@ from app.scanner import Device, ScanError, scan_devices
 from app.driver_backup import DriverBackupError, backup_driver_store, restore_driver_store
 from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot
 from app.driver_sources import source_for_device, open_official_source
+from app.vendor_utilities import detect_vendor_utilities, open_vendor_scan_page, scan_dell_updates
 
 
 class ScanWorker(QThread):
@@ -32,6 +33,21 @@ class TelemetryWorker(QThread):
         try:
             self.completed.emit(collect_system_snapshot())
         except TelemetryError as exc:
+            self.failed.emit(str(exc))
+
+
+class DellScanWorker(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, executable: str, parent=None):
+        super().__init__(parent)
+        self.executable = executable
+
+    def run(self):
+        try:
+            self.completed.emit(scan_dell_updates(self.executable))
+        except RuntimeError as exc:
             self.failed.emit(str(exc))
 
 
@@ -230,7 +246,10 @@ class MainWindow(QMainWindow):
         update_controls = QHBoxLayout()
         self.update_search_button = QPushButton("Проверить наличие обновлений драйверов")
         self.update_search_button.clicked.connect(self.start_update_search)
-        update_controls.addWidget(self.update_search_button)
+        self.vendor_tools_button = QPushButton("Проверить утилиты Intel / AMD / Dell")
+        self.vendor_tools_button.clicked.connect(self.check_vendor_utilities)
+        update_controls.addWidget(self.update_search_button, 2)
+        update_controls.addWidget(self.vendor_tools_button, 1)
         update_layout.addLayout(update_controls)
         self.update_table = QTableWidget(0, 6)
         self.update_table.setHorizontalHeaderLabels([
@@ -239,7 +258,7 @@ class MainWindow(QMainWindow):
         ])
         self.configure_table(self.update_table)
         update_layout.addWidget(self.update_table, 1)
-        note = QLabel("Windows Update не используется. Сейчас DjShrek показывает установленные версии и даты, подбирает официальные сайты производителей. Автоматическое сравнение с каталогами и установка драйверов непосредственно из окна программы ещё не реализованы: совместимость и установку выполняет официальная утилита производителя. Неофициальные зеркала не используются.")
+        note = QLabel("Windows Update не используется. DjShrek проверяет наличие официальных утилит Intel DSA, AMD Auto-Detect / AMD Software и Dell Command | Update. Если утилита отсутствует, программа предложит открыть официальный сайт для её установки. Intel и AMD выполняют поиск в собственных официальных интерфейсах; Dell Command | Update поддерживает сканирование через официальный CLI. Установка обновлений не запускается без отдельного подтверждения пользователя.")
         note.setWordWrap(True)
         note.setObjectName("hint")
         update_layout.addWidget(note)
@@ -424,6 +443,76 @@ class MainWindow(QMainWindow):
     def on_update_error(self, message):
         self.status.setText("Проверка официальных источников не завершена.")
         QMessageBox.warning(self, "Проверка драйверов", message)
+
+
+    def check_vendor_utilities(self):
+        if sys.platform != "win32":
+            QMessageBox.information(self, "Официальные утилиты", "Проверка доступна только в Windows 10/11.")
+            return
+        utilities = detect_vendor_utilities()
+        installed = [item for item in utilities if item.installed]
+        missing = [item for item in utilities if not item.installed]
+        messages = []
+        for item in installed:
+            messages.append(f"✓ {item.name}: обнаружена")
+        for item in missing:
+            answer = QMessageBox.question(
+                self, "Официальная утилита не найдена",
+                f"{item.name} не обнаружена. Открыть официальный сайт производителя для загрузки и установки?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                open_vendor_scan_page(item.key)
+                messages.append(f"Открыт официальный сайт: {item.name}")
+            else:
+                messages.append(f"Пропущено: {item.name}")
+        for item in installed:
+            if item.key in ("intel", "amd"):
+                open_vendor_scan_page(item.key)
+                messages.append(f"Открыт официальный сканер: {item.name}")
+            elif item.key == "dell":
+                if item.executable:
+                    self.status.setText("Запуск официального сканирования Dell Command | Update…")
+                    self.vendor_tools_button.setEnabled(False)
+                    self.dell_scan_worker = DellScanWorker(item.executable, self)
+                    self.dell_scan_worker.completed.connect(self.on_dell_scan_finished)
+                    self.dell_scan_worker.failed.connect(self.on_dell_scan_failed)
+                    self.dell_scan_worker.finished.connect(lambda: self.vendor_tools_button.setEnabled(True))
+                    self.dell_scan_worker.start()
+                else:
+                    QMessageBox.information(
+                        self, "Dell Command | Update",
+                        "Утилита Dell обнаружена, но dcu-cli.exe не найден. Откройте Dell Command | Update вручную или выполните переустановку с официального сайта."
+                    )
+        if messages:
+            self.event_log.appendPlainText("\\n".join(messages))
+        if not any(item.key == "dell" and item.installed and item.executable for item in installed):
+            self.status.setText("Проверка OEM-утилит завершена. Intel/AMD открывают официальные страницы проверки; отсутствующие утилиты предложено загрузить.")
+
+    def on_dell_scan_finished(self, updates):
+        self.update_table.setRowCount(len(updates))
+        for row, update in enumerate(updates):
+            values = [
+                update.get("title", "Обновление Dell"),
+                "Dell",
+                update.get("version") or "См. отчёт Dell",
+                update.get("date") or "Не указана",
+                "Dell Command | Update",
+                "Официальный CLI: проверено",
+            ]
+            for col, value in enumerate(values):
+                self.update_table.setItem(row, col, QTableWidgetItem(value))
+        self.update_table.resizeRowsToContents()
+        self.status.setText(
+            f"Dell Command | Update завершил проверку. Записей в отчёте: {len(updates)}. "
+            "Применение обновлений не запускалось."
+        )
+        self.event_log.appendPlainText(f"Dell Command | Update: найдено записей отчёта — {len(updates)}.")
+
+    def on_dell_scan_failed(self, message):
+        self.status.setText("Сканирование Dell Command | Update не завершено.")
+        QMessageBox.warning(self, "Dell Command | Update", message)
 
 
 def main():
