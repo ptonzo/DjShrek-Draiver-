@@ -62,6 +62,31 @@ python server.py --issue --payment-reference PROVIDER_PAYMENT_ID
 
 The command prints the key once. Deliver it to the buyer through a protected channel. A unique payment reference prevents issuing twice for the same order.
 
+## Windows uninstall/reinstall license retention
+
+The desktop client has a protected local storage module at `app/license_storage.py`.
+After the activation flow is connected, it can store the 20-character license key
+encrypted with Windows DPAPI (`CRYPTPROTECT_LOCAL_MACHINE`) under:
+
+`HKLM\\Software\\DjShrek\\CyberClub\\License`
+
+Only the encrypted blob is written to the registry. The Inno Setup installer
+creates this registry location with user write access and marks it
+`uninsneveruninstall`; the uninstaller therefore leaves the entitlement intact.
+A normal uninstall/reinstall of the app on the same Windows installation does
+not require buying another license.
+
+This is not a backup across Windows reinstall, disk formatting, or replacement
+of the licensed machine. The server remains authoritative: the key is still
+bound to its first activated machine and its one-calendar-year expiry. If
+Windows is reinstalled or the machine changes, recovery/transfer must be handled
+through a documented support process; do not silently permit a second activation.
+
+**Integration status:** the protected registry storage and installer retention
+are implemented as a foundation. The desktop activation/verification flow is
+not yet connected to the license API, so no claim is made that the current
+published EXE already saves an activated key there.
+
 ## Production requirements still outstanding
 
 1. Select an SBP acquiring provider and complete merchant onboarding.
