@@ -15,6 +15,7 @@ from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapsho
 from app.driver_sources import source_for_device, open_official_source
 from app.vendor_utilities import detect_vendor_utilities, open_vendor_scan_page, scan_dell_updates
 from app.i18n import LANGUAGES, system_language, translate
+from app.updater import check_latest_release, download_and_schedule, UpdateError
 
 
 class ScanWorker(QThread):
@@ -49,6 +50,17 @@ class DellScanWorker(QThread):
         try:
             self.completed.emit(scan_dell_updates(self.executable))
         except RuntimeError as exc:
+            self.failed.emit(str(exc))
+
+
+class UpdateCheckWorker(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def run(self):
+        try:
+            self.completed.emit(check_latest_release())
+        except UpdateError as exc:
             self.failed.emit(str(exc))
 
 
@@ -104,6 +116,8 @@ class MainWindow(QMainWindow):
         self.update_worker = None
         self.install_worker = None
         self._telemetry_busy = False
+        self.update_check_worker = None
+        self.pending_app_update = None
 
         root = QWidget()
         layout = QVBoxLayout(root)
@@ -167,6 +181,7 @@ class MainWindow(QMainWindow):
         self.telemetry_timer.timeout.connect(self.refresh_telemetry)
         self.telemetry_timer.start()
         QTimer.singleShot(250, self.refresh_telemetry)
+        QTimer.singleShot(1800, self.check_application_updates)
 
     def build_dashboard_tab(self):
         tab = QWidget()
@@ -271,6 +286,44 @@ class MainWindow(QMainWindow):
         update_layout.addWidget(note)
         self.tabs.addTab(update_tab, "Обновления драйверов")
 
+
+    def check_application_updates(self):
+        if not getattr(sys, "frozen", False):
+            return
+        if self.update_check_worker is not None and self.update_check_worker.isRunning():
+            return
+        self.status.setText("Проверка обновлений DjShrek-Draiver…")
+        self.update_check_worker = UpdateCheckWorker(self)
+        self.update_check_worker.completed.connect(self.on_app_update_checked)
+        self.update_check_worker.failed.connect(self.on_app_update_check_failed)
+        self.update_check_worker.start()
+
+    def on_app_update_checked(self, update):
+        if not update:
+            self.status.setText("Установлена последняя опубликованная версия DjShrek-Draiver.")
+            return
+        self.pending_app_update = update
+        answer = QMessageBox.question(
+            self, "Доступно обновление DjShrek-Draiver",
+            f"Доступна версия {update['version']}. Скачать и установить обновление сейчас?\n\n"
+            "Программа закроется на время замены файлов и автоматически запустится снова. "
+            "Ваши настройки и сохранённая лицензия не удаляются.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            try:
+                download_and_schedule(update)
+            except UpdateError as exc:
+                QMessageBox.warning(self, "Обновление", str(exc))
+                return
+            QApplication.quit()
+        else:
+            self.status.setText(f"Доступно обновление {update['version']}; установка отложена.")
+
+    def on_app_update_check_failed(self, message):
+        self.status.setText("Не удалось проверить обновления программы.")
+        self.event_log.appendPlainText(message)
 
     def build_settings_tab(self):
         tab = QWidget()
