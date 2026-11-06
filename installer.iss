@@ -38,5 +38,9 @@ Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\DjShrek-Draiver Cyber Club"; Filename: "{app}\DjShrek-Draiver Cyber Club.exe"; IconFilename: "{app}\DjShrek-Draiver Cyber Club.exe"
 Name: "{autodesktop}\DjShrek-Draiver Cyber Club"; Filename: "{app}\DjShrek-Draiver Cyber Club.exe"; IconFilename: "{app}\DjShrek-Draiver Cyber Club.exe"; Tasks: desktopicon
 
+[InstallDelete]
+Type: files; Name: "{autodesktop}\\DjShrek Draiver.lnk"
+Type: files; Name: "{group}\\DjShrek Draiver.lnk"
+
 [Run]
 Filename: "{app}\DjShrek-Draiver Cyber Club.exe"; Description: "Запустить DjShrek-Draiver Cyber Club"; Flags: postinstall nowait skipifsilent
