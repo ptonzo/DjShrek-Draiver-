@@ -144,18 +144,18 @@ class MainWindow(QMainWindow):
             QLabel#metricHeading { color: #9e91c9; font-size: 8pt; font-weight: 800; }
             QLabel#metricValue { color: #f7f1ff; font-size: 23pt; font-weight: 800; }
             QLabel#metricDetail { color: #a7a9c9; font-size: 9pt; }
-            QLabel#sectionTitle { color: #c9fff0; font-size: 13pt; font-weight: 800; padding: 5px 0; }
+            QLabel#sectionTitle { color: #d7a8ff; font-size: 13pt; font-weight: 800; padding: 5px 0; }
             QFrame#metricCard, QFrame#infoCard { background: #121629; border: 1px solid #4a3471; border-radius: 11px; }
             QLineEdit, QTableWidget { background: #101a23; border: 1px solid #24404a; border-radius: 8px; padding: 9px; color: #f2fbff; selection-background-color: #8b5cf6; }
-            QLineEdit:focus { border: 1px solid #00e5a0; }
-            QHeaderView::section { background: #20233d; color: #baf8e3; padding: 10px; border: 0; border-bottom: 1px solid #5a3c88; font-weight: 700; }
+            QLineEdit:focus { border: 1px solid #00e5ff; }
+            QHeaderView::section { background: #20233d; color: #d7a8ff; padding: 10px; border: 0; border-bottom: 1px solid #5a3c88; font-weight: 700; }
             QTableWidget { alternate-background-color: #1a1d35; gridline-color: #2e3152; }
-            QPushButton { background: #00a878; color: #03130e; border: 0; border-radius: 8px; padding: 11px 15px; font-weight: 800; }
+            QPushButton { background: #8b5cf6; color: #ffffff; border: 0; border-radius: 8px; padding: 11px 15px; font-weight: 800; }
             QPushButton:hover { background: #00f0ff; }
             QPushButton:pressed { background: #6538d8; }
             QPushButton:disabled { background: #333052; color: #a69bbd; }
             QProgressBar { background: #1b2338; border: 0; border-radius: 4px; height: 8px; }
-            QProgressBar::chunk { background: #00e5a0; border-radius: 4px; }
+            QProgressBar::chunk { background: #00e5ff; border-radius: 4px; }
             QTabWidget::pane { border: 1px solid #39305f; border-radius: 10px; top: -1px; background: #0d151d; }
             QTabBar::tab { background: #15172b; color: #91a8b1; padding: 12px 20px; margin-right: 4px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
             QTabBar::tab:selected { background: #241b3b; color: #d7a8ff; border-bottom: 2px solid #00e5a0; }
