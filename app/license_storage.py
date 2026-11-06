@@ -9,13 +9,12 @@ server binds the entitlement to a different machine.
 """
 from __future__ import annotations
 
-import base64
 import ctypes
 import json
 import sys
 from ctypes import wintypes
 
-REGISTRY_PATH = r"SOFTWARE\\DjShrek\\CyberClub\\License"
+REGISTRY_PATH = r"SOFTWARE\DjShrek\CyberClub\License"
 REGISTRY_VALUE = "ProtectedEntitlement"
 KEY_LENGTH = 20
 
