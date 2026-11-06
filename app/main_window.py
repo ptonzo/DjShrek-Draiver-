@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
             ("cpu", "Процессор"), ("gpu", "Графика"),
             ("ram", "Память"), ("os", "Операционная система"),
             ("disk", "Системный накопитель"), ("uptime", "Время работы"),
-            ("cpu_temp", "Температура CPU"), ("gpu_temp", "Температура GPU"),
+            ("cpu_temp", "Температура ACPI"), ("gpu_temp", "Температура GPU"),
         ]
         for index, (key, caption) in enumerate(fields):
             card = QFrame()
@@ -301,7 +301,7 @@ class MainWindow(QMainWindow):
             "os": snapshot.os_name,
             "disk": snapshot.disk_name,
             "uptime": snapshot.uptime,
-            "cpu_temp": f"{snapshot.cpu_temp_c:.0f} °C" if snapshot.cpu_temp_c is not None else "Нет доступного датчика",
+            "cpu_temp": f"{snapshot.cpu_temp_c:.0f} °C (ACPI)" if snapshot.cpu_temp_c is not None else "Нет доступного датчика",
             "gpu_temp": f"{snapshot.gpu_temp_c:.0f} °C" if snapshot.gpu_temp_c is not None else "Нет доступного датчика",
         }
         for key, value in values.items():
