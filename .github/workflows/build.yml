@@ -35,6 +35,23 @@ jobs:
           if (!(Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
           & $iscc installer.iss
           if (!(Test-Path "dist\installer\DjShrek-Draiver-Setup.exe")) { throw "Installer EXE was not created" }
+      - name: Smoke-test installed application
+        shell: pwsh
+        run: |
+          $installer = (Resolve-Path "dist\\installer\\DjShrek-Draiver-Setup.exe").Path
+          $install = Start-Process -FilePath $installer -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer exited with code $($install.ExitCode)" }
+          $app = Join-Path $env:ProgramFiles "DjShrek Draiver\\DjShrek Draiver.exe"
+          if (!(Test-Path $app)) { throw "Installed application not found: $app" }
+          $process = Start-Process -FilePath $app -PassThru
+          Start-Sleep -Seconds 8
+          $process.Refresh()
+          if ($process.HasExited) { throw "Application exited during startup smoke test (code $($process.ExitCode))" }
+          Stop-Process -Id $process.Id -Force
+          $uninstaller = Join-Path $env:ProgramFiles "DjShrek Draiver\\unins000.exe"
+          if (Test-Path $uninstaller) {
+            Start-Process -FilePath $uninstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: DjShrek-Draiver-Setup-Windows-x64
