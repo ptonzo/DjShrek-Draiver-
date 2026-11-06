@@ -1,71 +1,62 @@
-# DjShrek Draiver
+# DjShrek-Draiver Cyber Club
 
-Windows 10/11 x64 utility for device inventory, live PC monitoring and controlled driver updates.
+Windows 10/11 x64 PC control center for hardware inventory, live monitoring and driver-source discovery.
 
-**Current status:** Neon Gaming Control Center dashboard is merged into `main`. The Windows x64 single-file installer is built by GitHub Actions. It must still be smoke-tested on physical Windows 10/11 hardware; sensor availability depends on hardware, drivers and firmware.
+## Interface
 
-## Features
+- DjShrek Neon Gaming visual base: near-black graphite, RGB violet/cyan accents, gaming-style tabs and controls.
+- Control Center dashboard: CPU, RAM, system disk, GPU, OS, uptime and available thermal sensors.
+- Event log and background monitoring refresh.
+- Device inventory with manufacturer, signed driver provider, version, date and INF package.
+- Cyrillic device names are read through UTF-8 PowerShell output.
 
-- Neon Gaming graphite interface with neon-green accents.
-- Live dashboard: CPU load, RAM use, C: drive usage, detected CPU/GPU, installed RAM, Windows build and system uptime.
-- Background telemetry refresh every 2.5 seconds without blocking the UI.
-- NVIDIA GPU load and temperature through `nvidia-smi` when available.
-- ACPI thermal-zone reading only when exposed by firmware; unavailable sensors are not fabricated.
-- Hardware inventory through Windows CIM.
-- Search and CSV export.
-- Driver update discovery through the built-in Windows Update Agent (driver category only).
-- Explicit per-update installation confirmation.
-- Export of installed third-party driver packages with `pnputil`.
-- User-confirmed restore of exported packages with `pnputil`.
-- No third-party driver bundles or unofficial driver download mirrors.
+## Driver inventory and official sources
 
-## Requirements
+The driver page has a single **Проверить наличие обновлений драйверов** action. It reads the installed signed-driver inventory and displays the installed version/date and a link to the matching manufacturer's official support source.
 
-- Windows 10 or Windows 11, 64-bit.
-- Python 3.11+ for source/developer run.
-- PowerShell and Windows Update service.
-- NVIDIA telemetry requires compatible NVIDIA drivers and `nvidia-smi`; other GPU vendors may not expose utilization/temperature through this version.
+Windows Update Agent is not used by the driver page. The app does not silently download packages from mirrors or install unknown driver files.
 
-## Run from source
+Important: vendor driver catalogs and update utilities differ. This version links to official tools/catalogs (Intel DSA, NVIDIA, AMD and OEM support sites). It does not yet perform universal in-app version comparison or unattended installation from every vendor; the manufacturer's own utility confirms compatibility and runs its signed installer. This is deliberate: a generic installer must not guess driver compatibility or install packages from unofficial sources.
+
+Official sources currently mapped:
+- Intel Driver & Support Assistant: https://www.intel.com/content/www/us/en/support/detect.html
+- NVIDIA Driver Downloads: https://www.nvidia.com/Download/index.aspx
+- AMD Drivers & Support: https://www.amd.com/en/support/download/drivers.html
+- Dell: https://www.dell.com/support/home/en-us?app=drivers
+- Lenovo: https://pcsupport.lenovo.com/
+- HP: https://support.hp.com/drivers
+- ASUS: https://www.asus.com/support/download-center/
+- Acer: https://www.acer.com/us-en/support/drivers-and-manuals
+- MSI: https://www.msi.com/support/download
+
+## Other functions
+
+- Search and CSV export of detected devices.
+- Export installed driver packages using Windows `pnputil`.
+- User-confirmed restore workflow for exported packages.
+- NVIDIA load/temperature via `nvidia-smi`, if installed.
+- ACPI temperature only when firmware exposes a supported sensor; unavailable values are never fabricated.
+
+## Build and test
+
+Requirements: Windows 10/11 x64, Python 3.12 for CI/development.
 
 ```powershell
-py -3.11 -m venv .venv
-.\\.venv\\Scripts\\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-python -m app
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+python run.py
 ```
 
-## Install on a Windows PC
+GitHub Actions builds the Windows installer. The artifact is named `DjShrek-Draiver-Setup-Windows-x64` and contains `DjShrek-Draiver-Setup.exe`.
 
-The distributable is a single file: `DjShrek-Draiver-Setup.exe` (Windows 10/11 x64). Run it, approve the Windows UAC administrator prompt, choose whether to create a desktop shortcut, and click Install. The installer copies the application, creates Start menu/uninstall entries, and can launch the program at the end. Python is not required on the target PC.
+## Known limitations
 
-Download the artifact named `DjShrek-Draiver-Setup-Windows-x64` from the latest successful **Build Windows installer** run in the Actions tab. The artifact is a ZIP wrapper containing the single setup EXE; artifacts expire after 30 days.
-
-## Safety and limitations
-
-1. Updates are discovered from the Windows Update Agent, not third-party driver sites.
-2. Installation requires selecting one update and confirming it.
-3. Windows Update handles package acquisition and installation.
-4. Use **Создать копию драйверов** before changing drivers. Choose an empty folder with enough free space; Windows may require running the app as Administrator.
-5. **Восстановить из копии** re-adds packages from the selected backup using `pnputil /add-driver`. It is not a guaranteed rollback: Windows selects compatible packages and may not restore every previous device state. Create a Windows restore point separately before changes.
-6. Driver export/restore commands are explicit user actions; the app does not silently change drivers during inventory.
-7. Temperature and GPU telemetry availability varies by device, driver and firmware. Unsupported values are shown as unavailable.
-8. The installer is not digitally signed yet; Windows SmartScreen may display a warning.
-9. Commercial activation, billing, device limits and a license server are not implemented.
-
-## Roadmap
-
-- [x] Windows device inventory
-- [x] Search and CSV export
-- [x] Windows Update driver discovery
-- [x] Explicit installation confirmation for one selected update
-- [x] Driver package export and user-confirmed restore workflow
-- [x] Neon Gaming live monitoring dashboard
-- [ ] Independent package signature/provenance report
-- [ ] Automated restore-point creation and verified rollback
-- [ ] Signed installer and release pipeline
-- [ ] Connect the Cyber Club license API to the desktop app and complete SBP payment integration
-- [ ] Physical Windows 10/11 hardware test matrix
+- Universal automatic driver version lookup and unattended in-app installation across every OEM is not implemented yet. Only official vendor catalog/utility links are provided.
+- Physical validation is required on Windows 10 and Windows 11 hardware.
+- Temperature and GPU telemetry availability depends on hardware, firmware and drivers.
+- The installer is not code-signed yet; SmartScreen may show a warning.
+- Commercial license activation and SBP payment are not connected to the desktop app.
 
 Not affiliated with Microsoft or hardware manufacturers.
