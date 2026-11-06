@@ -2,7 +2,7 @@
 
 Windows 10/11 x64 utility for device inventory and controlled driver updates.
 
-**Current status:** functional early release candidate; still requires hands-on testing on physical Windows 10/11 machines. It inventories Plug and Play devices and can query/install selected driver-class updates offered by the Windows Update Agent. Installation always requires explicit user confirmation.
+**Current status:** Windows x64 installer pipeline is configured; the installer must pass its first CI build and then be smoke-tested on a clean Windows 10/11 PC. It inventories Plug and Play devices and can query/install selected driver-class updates offered by the Windows Update Agent. Installation always requires explicit user confirmation.
 
 ## Features
 
@@ -31,11 +31,17 @@ pip install -r requirements.txt
 python -m app
 ```
 
-## Build EXE
+## Install on a Windows PC
+
+The release installer is a single file: `DjShrek-Draiver-Setup.exe` (Windows 10/11 x64). Run it, approve the Windows UAC administrator prompt, choose whether to create a desktop shortcut, and click Install. The installer copies the application, creates Start menu/uninstall entries, and can launch the program at the end. Python is not required on the target PC.
+
+The installer is built by GitHub Actions from `installer.iss`. Download the artifact named `DjShrek-Draiver-Setup-Windows-x64` from the latest successful **Build Windows installer** run in the Actions tab. The build artifact is temporary (30 days); a tagged release will be used for durable distribution.
+
+## Developer build
 
 ```powershell
 pip install -r requirements-dev.txt
-pyinstaller --noconfirm --clean --windowed --name "DjShrek Draiver" --collect-all PySide6 run.py
+pyinstaller --noconfirm --clean --windowed --onedir --name "DjShrek Draiver" --collect-all PySide6 run.py
 ```
 
 ## Safety
