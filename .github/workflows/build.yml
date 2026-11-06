@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - feature/neon-control-center
     tags:
       - "v*"
 
@@ -18,8 +19,10 @@ jobs:
           python-version: "3.12"
       - name: Install Python dependencies
         run: python -m pip install -r requirements-dev.txt
+      - name: Generate Cyber Club icons
+        run: python app/build_branding.py
       - name: Build application
-        run: pyinstaller --noconfirm --clean --windowed --onedir --name "DjShrek Draiver" --collect-all PySide6 run.py
+        run: pyinstaller --noconfirm --clean --windowed --onedir --name "DjShrek Draiver" --icon app/assets/DjShrek-Draiver.ico --add-data "app/assets;app/assets" --collect-all PySide6 run.py
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build single-file installer
