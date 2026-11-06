@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import subprocess
 from dataclasses import dataclass
@@ -15,6 +16,8 @@ class Device:
     device_id: str
     driver_version: str
     driver_date: str
+    driver_provider: str = ""
+    inf_name: str = ""
 
     @classmethod
     def from_mapping(cls, row: dict[str, Any]) -> "Device":
@@ -26,9 +29,12 @@ class Device:
             device_id=str(row.get("PNPDeviceID") or ""),
             driver_version=str(row.get("DriverVersion") or ""),
             driver_date=str(row.get("DriverDate") or ""),
+            driver_provider=str(row.get("DriverProvider") or ""),
+            inf_name=str(row.get("InfName") or ""),
         )
 
 
+# EncodedCommand prevents locale/code-page corruption of Cyrillic device names.
 SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
@@ -63,9 +69,11 @@ class ScanError(RuntimeError):
 
 
 def scan_devices(timeout_seconds: int = 45) -> list[Device]:
+    encoded_script = base64.b64encode(SCRIPT.encode("utf-16le")).decode("ascii")
     try:
         result = subprocess.run(
-            ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", __import__("base64").b64encode(SCRIPT.encode("utf-16le")).decode("ascii")],
+            ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
+             "-EncodedCommand", encoded_script],
             check=False, capture_output=True, text=True, encoding="utf-8",
             errors="replace", timeout=timeout_seconds,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -88,4 +96,5 @@ def scan_devices(timeout_seconds: int = 45) -> list[Device]:
         parsed = [parsed]
     if not isinstance(parsed, list):
         raise ScanError("Некорректный формат списка устройств.")
-    return sorted((Device.from_mapping(x) for x in parsed if isinstance(x, dict)), key=lambda x: x.name.casefold())
+    devices = [Device.from_mapping(row) for row in parsed if isinstance(row, dict)]
+    return sorted(devices, key=lambda device: device.name.casefold())
