@@ -22,13 +22,11 @@ class UpdateError(RuntimeError):
 
 
 def current_version() -> str:
-    if getattr(sys, "frozen", False):
-        try:
-            from importlib.metadata import version
-            return version("djshrek-draiver")
-        except Exception:
-            pass
-    return os.environ.get("DJSHREK_VERSION", "0.2.0")
+    try:
+        from app.version import VERSION
+        return VERSION
+    except Exception:
+        return os.environ.get("DJSHREK_VERSION", "0.2.0")
 
 
 def _version_tuple(value: str) -> tuple[int, ...]:
