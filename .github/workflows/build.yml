@@ -25,7 +25,7 @@ jobs:
           python assets/create_icon.py
           if (!(Test-Path "assets/DjShrek-Draiver.ico")) { throw "ICO icon was not created" }
       - name: Build application
-        run: pyinstaller --noconfirm --clean --windowed --onedir --name "DjShrek Draiver" --icon "assets/DjShrek-Draiver.ico" --collect-all PySide6 run.py
+        run: pyinstaller --noconfirm --clean --windowed --onedir --name "DjShrek-Draiver Cyber Club" --icon "assets/DjShrek-Draiver.ico" --collect-all PySide6 run.py
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build single-file installer
