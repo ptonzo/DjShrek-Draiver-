@@ -31,7 +31,29 @@ class Device:
 
 SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
-$items = Get-CimInstance Win32_PnPEntity | Select-Object Name, Manufacturer, Status, PNPClass, PNPDeviceID, DriverVersion, DriverDate
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+$OutputEncoding = [Console]::OutputEncoding
+$driverMap = @{}
+Get-CimInstance Win32_PnPSignedDriver | ForEach-Object {
+    if ($_.DeviceID) { $driverMap[[string]$_.DeviceID] = $_ }
+}
+$items = Get-CimInstance Win32_PnPEntity | ForEach-Object {
+    $id = [string]$_.PNPDeviceID
+    $drv = $driverMap[$id]
+    $date = ''
+    if ($drv -and $drv.DriverDate) { $date = ([datetime]$drv.DriverDate).ToString('yyyy-MM-dd') }
+    [pscustomobject]@{
+        Name = [string]$_.Name
+        Manufacturer = [string]$_.Manufacturer
+        Status = [string]$_.Status
+        PNPClass = [string]$_.PNPClass
+        PNPDeviceID = $id
+        DriverVersion = if ($drv) { [string]$drv.DriverVersion } else { '' }
+        DriverDate = $date
+        DriverProvider = if ($drv) { [string]$drv.DriverProviderName } else { '' }
+        InfName = if ($drv) { [string]$drv.InfName } else { '' }
+    }
+}
 ConvertTo-Json -InputObject @($items) -Depth 4 -Compress
 """
 
@@ -43,7 +65,7 @@ class ScanError(RuntimeError):
 def scan_devices(timeout_seconds: int = 45) -> list[Device]:
     try:
         result = subprocess.run(
-            ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", SCRIPT],
+            ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", __import__("base64").b64encode(SCRIPT.encode("utf-16le")).decode("ascii")],
             check=False, capture_output=True, text=True, encoding="utf-8",
             errors="replace", timeout=timeout_seconds,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
