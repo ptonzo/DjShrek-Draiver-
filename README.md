@@ -65,7 +65,7 @@ Download the artifact named `DjShrek-Draiver-Setup-Windows-x64` from the latest 
 - [ ] Independent package signature/provenance report
 - [ ] Automated restore-point creation and verified rollback
 - [ ] Signed installer and release pipeline
-- [ ] Commercial license server and activation UI
+- [ ] Connect the Cyber Club license API to the desktop app and complete SBP payment integration
 - [ ] Physical Windows 10/11 hardware test matrix
 
 Not affiliated with Microsoft or hardware manufacturers.
