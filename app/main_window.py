@@ -11,7 +11,8 @@ from app.export import export_devices_csv
 from app.scanner import Device, ScanError, scan_devices
 from app.windows_update import DriverUpdate, WindowsUpdateError, find_driver_updates, install_driver_update
 from app.driver_backup import DriverBackupError, backup_driver_store, restore_driver_store
-from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot\nfrom app.driver_sources import source_for_device, open_official_source
+from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot
+from app.driver_sources import source_for_device, open_official_source
 
 
 class ScanWorker(QThread):
