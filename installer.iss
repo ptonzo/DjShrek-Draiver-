@@ -11,6 +11,8 @@ OutputBaseFilename=DjShrek-Draiver-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=assets\DjShrek-Setup.ico
+UninstallDisplayIcon={app}\DjShrek-Draiver.ico
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
@@ -30,10 +32,11 @@ Name: "desktopicon"; Description: "Создать ярлык на рабочем
 Source: "dist\DjShrek Draiver\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\DjShrek-Draiver.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\DjShrek Draiver"; Filename: "{app}\DjShrek Draiver.exe"
-Name: "{autodesktop}\DjShrek Draiver"; Filename: "{app}\DjShrek Draiver.exe"; Tasks: desktopicon
+Name: "{group}\DjShrek-Draiver"; Filename: "{app}\DjShrek Draiver.exe"; IconFilename: "{app}\DjShrek-Draiver.ico"
+Name: "{autodesktop}\DjShrek-Draiver"; Filename: "{app}\DjShrek Draiver.exe"; IconFilename: "{app}\DjShrek-Draiver.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\DjShrek Draiver.exe"; Description: "Запустить DjShrek Draiver"; Flags: postinstall nowait skipifsilent
