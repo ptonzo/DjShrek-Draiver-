@@ -27,6 +27,11 @@ LicenseFile=LICENSE.rtf
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Registry]
+; Reserve a writable per-machine location for the DPAPI-protected entitlement.
+; uninsneveruninstall is intentional: uninstall must not erase a paid license.
+Root: HKLM; Subkey: "Software\\DjShrek\\CyberClub\\License"; Flags: uninsneveruninstall; Permissions: users-modify
+
 [Tasks]
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные параметры:"; Flags: unchecked
 
