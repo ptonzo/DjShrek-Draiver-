@@ -1,5 +1,9 @@
 name: Build Windows installer
 
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   push:
