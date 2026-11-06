@@ -17,6 +17,7 @@ from app.vendor_utilities import detect_vendor_utilities, open_vendor_scan_page,
 from app.i18n import LANGUAGES, system_language, translate
 from app.updater import check_latest_release, download_and_schedule, UpdateError
 from app.registry_checker import RegistryFinding, scan_registry, repair_stale_startup_entry
+from app.junk_cleaner import JunkFile, scan_junk_files, clean_junk_files, CleanupResult
 
 
 class ScanWorker(QThread):
@@ -62,6 +63,32 @@ class UpdateCheckWorker(QThread):
         try:
             self.completed.emit(check_latest_release())
         except UpdateError as exc:
+            self.failed.emit(str(exc))
+
+
+class JunkScanWorker(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def run(self):
+        try:
+            self.completed.emit(scan_junk_files())
+        except OSError as exc:
+            self.failed.emit(str(exc))
+
+
+class JunkCleanWorker(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, files: list[JunkFile], parent=None):
+        super().__init__(parent)
+        self.files = files
+
+    def run(self):
+        try:
+            self.completed.emit(clean_junk_files(self.files))
+        except OSError as exc:
             self.failed.emit(str(exc))
 
 
@@ -142,6 +169,7 @@ class MainWindow(QMainWindow):
         self.build_devices_tab()
         self.build_updates_tab()
         self.build_registry_tab()
+        self.build_junk_tab()
         self.build_settings_tab()
 
         self.status = QLabel("Инициализация мониторинга…")
@@ -434,6 +462,150 @@ class MainWindow(QMainWindow):
             return
         QMessageBox.information(self, "Исправление выполнено", f"Запись удалена. Резервная копия:\n{backup}")
         self.start_registry_scan()
+
+    def build_junk_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.addWidget(self.section_label("БЫСТРАЯ ПРОВЕРКА ВРЕМЕННЫХ ФАЙЛОВ"))
+        note = QLabel(
+            "Проверяются только временные папки Windows и текущего пользователя. "
+            "В список попадают файлы старше 7 дней. Загрузки, документы, фотографии, "
+            "корзина, кэш браузеров и личные данные не затрагиваются. Заблокированные "
+            "Windows файлы будут пропущены."
+        )
+        note.setWordWrap(True)
+        note.setObjectName("hint")
+        layout.addWidget(note)
+        controls = QHBoxLayout()
+        self.junk_scan_button = QPushButton("Быстрая проверка")
+        self.junk_scan_button.clicked.connect(self.start_junk_scan)
+        self.junk_clean_button = QPushButton("Очистить выбранное")
+        self.junk_clean_button.setEnabled(False)
+        self.junk_clean_button.clicked.connect(self.confirm_junk_cleanup)
+        controls.addWidget(self.junk_scan_button)
+        controls.addWidget(self.junk_clean_button)
+        layout.addLayout(controls)
+        self.junk_summary = QLabel("Проверка ещё не запускалась.")
+        self.junk_summary.setObjectName("metricDetail")
+        layout.addWidget(self.junk_summary)
+        self.junk_table = QTableWidget(0, 3)
+        self.junk_table.setHorizontalHeaderLabels(["Выбрать", "Категория", "Объём"])
+        self.configure_table(self.junk_table)
+        self.junk_table.setColumnWidth(0, 90)
+        self.junk_table.setColumnWidth(1, 420)
+        layout.addWidget(self.junk_table, 1)
+        self.junk_files: list[JunkFile] = []
+        self.junk_categories: dict[str, list[JunkFile]] = {}
+        self.junk_table.itemChanged.connect(self.on_junk_selection_changed)
+        self.tabs.addTab(tab, "Очистка компьютера")
+
+    @staticmethod
+    def format_bytes(value: int) -> str:
+        amount = float(value)
+        for unit in ("Б", "КБ", "МБ", "ГБ"):
+            if amount < 1024 or unit == "ГБ":
+                return f"{amount:.1f} {unit}"
+            amount /= 1024
+        return f"{amount:.1f} ГБ"
+
+    def start_junk_scan(self):
+        if sys.platform != "win32":
+            QMessageBox.information(self, "Очистка компьютера", "Функция доступна только в Windows 10/11.")
+            return
+        if getattr(self, "junk_scan_worker", None) is not None and self.junk_scan_worker.isRunning():
+            return
+        self.junk_scan_button.setEnabled(False)
+        self.junk_clean_button.setEnabled(False)
+        self.junk_summary.setText("Идёт проверка временных папок…")
+        self.junk_scan_worker = JunkScanWorker(self)
+        self.junk_scan_worker.completed.connect(self.on_junk_scan_finished)
+        self.junk_scan_worker.failed.connect(self.on_junk_scan_failed)
+        self.junk_scan_worker.finished.connect(lambda: self.junk_scan_button.setEnabled(True))
+        self.junk_scan_worker.start()
+
+    def on_junk_scan_finished(self, files):
+        self.junk_files = files
+        self.junk_categories = {}
+        for item in files:
+            self.junk_categories.setdefault(item.category, []).append(item)
+        self.junk_table.blockSignals(True)
+        self.junk_table.setRowCount(len(self.junk_categories))
+        for row, (category, items) in enumerate(self.junk_categories.items()):
+            size = sum(item.size for item in items)
+            choice = QTableWidgetItem("Выбрать")
+            choice.setFlags(choice.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            choice.setCheckState(Qt.CheckState.Checked)
+            self.junk_table.setItem(row, 0, choice)
+            self.junk_table.setItem(row, 1, QTableWidgetItem(category))
+            self.junk_table.setItem(row, 2, QTableWidgetItem(
+                f"{self.format_bytes(size)} · {len(items)} файлов"
+            ))
+        self.junk_table.blockSignals(False)
+        total = sum(item.size for item in files)
+        self.junk_summary.setText(
+            f"Найдено: {len(files)} файлов · потенциально освобождаемо: {self.format_bytes(total)}. "
+            "Отметьте категории для очистки."
+        )
+        self.junk_clean_button.setEnabled(bool(files))
+        self.status.setText("Проверка временных файлов завершена. Ничего не удалено.")
+
+    def on_junk_scan_failed(self, message):
+        self.junk_summary.setText("Проверка не завершена.")
+        QMessageBox.warning(self, "Проверка временных файлов", message)
+
+    def on_junk_selection_changed(self, item):
+        if item.column() == 0:
+            selected = self.selected_junk_files()
+            self.junk_clean_button.setEnabled(bool(selected))
+
+    def selected_junk_files(self):
+        selected_categories = set()
+        for row, category in enumerate(self.junk_categories):
+            item = self.junk_table.item(row, 0)
+            if item and item.checkState() == Qt.CheckState.Checked:
+                selected_categories.add(category)
+        return [file for file in self.junk_files if file.category in selected_categories]
+
+    def confirm_junk_cleanup(self):
+        files = self.selected_junk_files()
+        if not files:
+            QMessageBox.information(self, "Очистка", "Выберите хотя бы одну категорию.")
+            return
+        amount = sum(item.size for item in files)
+        answer = QMessageBox.warning(
+            self, "Подтверждение очистки",
+            f"Удалить {len(files)} временных файлов? Потенциально освободится {self.format_bytes(amount)}.\n\n"
+            "Будут пропущены занятые, изменившиеся и недоступные файлы. Личные папки не затрагиваются.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.junk_clean_button.setEnabled(False)
+        self.junk_scan_button.setEnabled(False)
+        self.junk_summary.setText("Выполняется очистка…")
+        self.junk_clean_worker = JunkCleanWorker(files, self)
+        self.junk_clean_worker.completed.connect(self.on_junk_clean_finished)
+        self.junk_clean_worker.failed.connect(self.on_junk_clean_failed)
+        self.junk_clean_worker.finished.connect(lambda: self.junk_scan_button.setEnabled(True))
+        self.junk_clean_worker.start()
+
+    def on_junk_clean_finished(self, result: CleanupResult):
+        self.junk_summary.setText(
+            f"Удалено: {result.deleted_files} файлов · освобождено: {self.format_bytes(result.freed_bytes)} · "
+            f"пропущено: {result.skipped_files}"
+        )
+        self.event_log.appendPlainText(
+            f"Очистка временных файлов: удалено {result.deleted_files}, освобождено {self.format_bytes(result.freed_bytes)}, "
+            f"пропущено {result.skipped_files}."
+        )
+        if result.errors:
+            QMessageBox.warning(self, "Очистка завершена с замечаниями", "\n".join(result.errors[:10]))
+        self.start_junk_scan()
+
+    def on_junk_clean_failed(self, message):
+        self.junk_clean_button.setEnabled(True)
+        QMessageBox.warning(self, "Очистка", message)
 
     def build_settings_tab(self):
         tab = QWidget()
