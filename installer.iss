@@ -6,7 +6,6 @@ AppPublisher=Секисов М. В.
 DefaultDirName={autopf}\DjShrek Draiver
 DefaultGroupName=DjShrek-Draiver Cyber Club
 UninstallDisplayName=DjShrek-Draiver Cyber Club
-DefaultGroupName=DjShrek-Draiver Cyber Club
 OutputDir=dist\installer
 OutputBaseFilename=DjShrek-Draiver-Setup
 Compression=lzma2
