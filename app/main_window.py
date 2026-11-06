@@ -422,8 +422,8 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Драйверы", "Устройства не обнаружены.")
 
     def on_update_error(self, message):
-        self.status.setText("Операция Windows Update не завершена.")
-        QMessageBox.warning(self, "Windows Update", message)
+        self.status.setText("Проверка официальных источников не завершена.")
+        QMessageBox.warning(self, "Проверка драйверов", message)
 
 
 def main():
