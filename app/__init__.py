@@ -1,0 +1,1 @@
+"""DjShrek Draiver application."""
