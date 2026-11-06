@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
-    QWidget, QHeaderView, QTabWidget, QGridLayout, QProgressBar, QFrame,
+    QWidget, QHeaderView, QTabWidget, QGridLayout, QProgressBar, QFrame, QPlainTextEdit,
 )
 from app.export import export_devices_csv
 from app.scanner import Device, ScanError, scan_devices
@@ -111,31 +112,31 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
         self.setStyleSheet("""
-            QMainWindow { background: #090d14; }
-            QWidget { color: #e9f2f7; font-size: 10pt; }
-            QLabel#title { font-size: 27pt; font-weight: 800; color: #ffffff; }
-            QLabel#subtitle { color: #00e5ff; font-size: 9pt; font-weight: 800; letter-spacing: 2px; }
-            QLabel#status { color: #b9b3d9; padding: 9px 12px; background: #111d25; border: 1px solid #1e3940; border-radius: 8px; }
-            QLabel#hint { color: #b4b1d6; padding: 8px 2px; }
-            QLabel#metricHeading { color: #9e91c9; font-size: 8pt; font-weight: 800; }
-            QLabel#metricValue { color: #f7f1ff; font-size: 23pt; font-weight: 800; }
-            QLabel#metricDetail { color: #a7a9c9; font-size: 9pt; }
-            QLabel#sectionTitle { color: #d7a8ff; font-size: 13pt; font-weight: 800; padding: 5px 0; }
-            QFrame#metricCard, QFrame#infoCard { background: #121629; border: 1px solid #4a3471; border-radius: 11px; }
-            QLineEdit, QTableWidget { background: #101a23; border: 1px solid #24404a; border-radius: 8px; padding: 9px; color: #f2fbff; selection-background-color: #8b5cf6; }
+            QMainWindow { background: #070812; }
+            QWidget { color: #f2f0ff; font-size: 10pt; }
+            QLabel#title { font-size: 27pt; font-weight: 900; color: #ffffff; }
+            QLabel#subtitle { color: #00e5ff; font-size: 9pt; font-weight: 900; letter-spacing: 2px; }
+            QLabel#status { color: #c4b5fd; padding: 9px 12px; background: #111225; border: 1px solid #51358b; border-radius: 8px; }
+            QLabel#hint { color: #b7b5d8; padding: 8px 2px; }
+            QLabel#metricHeading { color: #a78bfa; font-size: 8pt; font-weight: 900; }
+            QLabel#metricValue { color: #ffffff; font-size: 23pt; font-weight: 900; }
+            QLabel#metricDetail { color: #a7b7d7; font-size: 9pt; }
+            QLabel#sectionTitle { color: #d7c5ff; font-size: 13pt; font-weight: 900; padding: 5px 0; }
+            QFrame#metricCard, QFrame#infoCard { background: #101326; border: 1px solid #493274; border-radius: 11px; }
+            QLineEdit, QTableWidget, QPlainTextEdit { background: #0e1222; border: 1px solid #34365c; border-radius: 8px; padding: 9px; color: #f2f0ff; selection-background-color: #6d42bd; }
             QLineEdit:focus { border: 1px solid #00e5ff; }
-            QHeaderView::section { background: #20233d; color: #d7a8ff; padding: 10px; border: 0; border-bottom: 1px solid #5a3c88; font-weight: 700; }
-            QTableWidget { alternate-background-color: #1a1d35; gridline-color: #2e3152; }
-            QPushButton { background: #8b5cf6; color: #ffffff; border: 0; border-radius: 8px; padding: 11px 15px; font-weight: 800; }
-            QPushButton:hover { background: #00f0ff; }
-            QPushButton:pressed { background: #6538d8; }
-            QPushButton:disabled { background: #333052; color: #a69bbd; }
-            QProgressBar { background: #1b2338; border: 0; border-radius: 4px; height: 8px; }
+            QHeaderView::section { background: #1b1c36; color: #d7c5ff; padding: 10px; border: 0; border-bottom: 1px solid #7048b8; font-weight: 800; }
+            QTableWidget { alternate-background-color: #151a30; gridline-color: #2d3150; }
+            QPushButton { background: #7444c8; color: #ffffff; border: 1px solid #9b70f0; border-radius: 8px; padding: 11px 15px; font-weight: 900; }
+            QPushButton:hover { background: #00a9c7; border-color: #00e5ff; color: #071018; }
+            QPushButton:pressed { background: #4e2c91; }
+            QPushButton:disabled { background: #292943; color: #8585a8; border-color: #393958; }
+            QProgressBar { background: #1b2038; border: 0; border-radius: 4px; height: 8px; }
             QProgressBar::chunk { background: #00e5ff; border-radius: 4px; }
-            QTabWidget::pane { border: 1px solid #39305f; border-radius: 10px; top: -1px; background: #0d151d; }
-            QTabBar::tab { background: #15172b; color: #91a8b1; padding: 12px 20px; margin-right: 4px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
-            QTabBar::tab:selected { background: #241b3b; color: #d7a8ff; border-bottom: 2px solid #00e5a0; }
-            QTabBar::tab:hover { color: #ffffff; }
+            QTabWidget::pane { border: 1px solid #493274; border-radius: 10px; top: -1px; background: #0b0e1b; }
+            QTabBar::tab { background: #14162a; color: #a8a5c9; padding: 12px 20px; margin-right: 4px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+            QTabBar::tab:selected { background: #30204e; color: #ffffff; border-bottom: 3px solid #00e5ff; }
+            QTabBar::tab:hover { color: #00e5ff; }
         """)
 
         self.telemetry_timer = QTimer(self)
@@ -184,6 +185,12 @@ class MainWindow(QMainWindow):
         note.setObjectName("hint")
         note.setWordWrap(True)
         layout.addWidget(note)
+        layout.addWidget(self.section_label("ЖУРНАЛ СОБЫТИЙ"))
+        self.event_log = QPlainTextEdit()
+        self.event_log.setReadOnly(True)
+        self.event_log.setMaximumHeight(112)
+        self.event_log.appendPlainText("Панель управления запущена.")
+        layout.addWidget(self.event_log)
         layout.addStretch(1)
         self.tabs.addTab(tab, "Центр управления")
 
