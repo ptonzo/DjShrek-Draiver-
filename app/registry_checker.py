@@ -82,7 +82,7 @@ def scan_registry() -> list[RegistryFinding]:
                     if not Path(expanded).is_file():
                         findings.append(RegistryFinding(
                             hive_name, subkey, value_name, value_data,
-                            f"Файл автозапуска не найден: {expanded}", "Ошибка", True
+                            f"Файл автозапуска не найден: {expanded}", "Ошибка", hive_name == "HKCU"
                         ))
         except FileNotFoundError:
             continue
