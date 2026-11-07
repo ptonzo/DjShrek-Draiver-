@@ -36,7 +36,7 @@ def _request(url: str, data: bytes | None = None, timeout: int = 30) -> str:
 def _catalog_search(hardware_id: str) -> list[dict[str, str]]:
     query = urllib.parse.urlencode({"q": hardware_id}).encode("utf-8")
     page = html.unescape(_request(CATALOG_URL, query))
-    rows = re.findall(r"<tr\\b[^>]*>(.*?)</tr>", page, flags=re.I | re.S)
+    rows = re.findall(r"<tr\b[^>]*>(.*?)</tr>", page, flags=re.I | re.S)
     found: list[dict[str, str]] = []
     for row in rows:
         # The Catalog has changed its onclick markup several times. Accept the
@@ -46,17 +46,17 @@ def _catalog_search(hardware_id: str) -> list[dict[str, str]]:
             row, re.I,
         )
         if not match:
-            match = re.search(r"updateID\\s*[:=]\\s*['\"]([0-9a-fA-F-]{36})", row, re.I)
+            match = re.search(r"updateID\s*[:=]\s*['\"]([0-9a-fA-F-]{36})", row, re.I)
         if not match:
             continue
 
-        cells = re.findall(r"<td\\b[^>]*>(.*?)</td>", row, flags=re.I | re.S)
+        cells = re.findall(r"<td\b[^>]*>(.*?)</td>", row, flags=re.I | re.S)
         cell_text = [
-            re.sub(r"\\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape(cell))).strip()
+            re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape(cell))).strip()
             for cell in cells
         ]
         cell_text = [value for value in cell_text if value]
-        plain = re.sub(r"\\s+", " ", re.sub(r"<[^>]+>", " ", row)).strip()
+        plain = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", row)).strip()
         if not plain:
             continue
 
@@ -65,12 +65,12 @@ def _catalog_search(hardware_id: str) -> list[dict[str, str]]:
         # when a cell has an unambiguous value rather than guessing.
         version = next(
             (value for value in cell_text
-             if re.fullmatch(r"v?\\d+(?:\\.\\d+){1,5}(?:[-+][A-Za-z0-9.-]+)?", value, re.I)),
+             if re.fullmatch(r"v?\d+(?:\.\d+){1,5}(?:[-+][A-Za-z0-9.-]+)?", value, re.I)),
             "",
         )
         date = next(
             (value for value in cell_text
-             if re.fullmatch(r"(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{4})", value)),
+             if re.fullmatch(r"v?\d+(?:\.\d+){1,5}(?:[-+][A-Za-z0-9.-]+)?", value, re.I)),
             "",
         )
         found.append({"UpdateId": match.group(1), "Title": title[:500],
