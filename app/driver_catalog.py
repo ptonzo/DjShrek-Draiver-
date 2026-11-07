@@ -41,10 +41,10 @@ def _catalog_search(hardware_id: str) -> list[dict[str, str]]:
     found: list[dict[str, str]] = []
     for row in rows:
         plain = html.unescape(re.sub(r'<[^>]+>', ' ', row))
-        plain = re.sub(r'\\s+', ' ', plain).strip()
-        match = re.search(r"downloadDialog\\.aspx\\?[^'\" ]*updateID=([0-9a-fA-F-]{36})", row, re.I)
+        plain = re.sub(r'\s+', ' ', plain).strip()
+        match = re.search(r"downloadDialog\.aspx\?[^'\" ]*updateID=([0-9a-fA-F-]{36})", row, re.I)
         if not match:
-            match = re.search(r"updateID\\s*[:=]\\s*['\"]([0-9a-fA-F-]{36})", row, re.I)
+            match = re.search(r"updateID\s*[:=]\\s*['\"]([0-9a-fA-F-]{36})", row, re.I)
         if not match or not plain:
             continue
         found.append({"UpdateId": match.group(1), "Title": plain[:500]})
@@ -54,7 +54,7 @@ def _catalog_search(hardware_id: str) -> list[dict[str, str]]:
 def _download_urls(update_id: str) -> list[str]:
     url = "https://www.catalog.update.microsoft.com/DownloadDialog.aspx?" + urllib.parse.urlencode({"updateID": update_id})
     page = _request(url)
-    urls = re.findall(r"https?://[^\\\"'<> ]+\\.(?:cab|zip)(?:\\?[^\\\"'<> ]*)?", html.unescape(page), re.I)
+    urls = re.findall(r"https?://[^\"'<> ]+\.(?:cab|zip)(?:\?[^\\\"'<> ]*)?", html.unescape(page), re.I)
     return list(dict.fromkeys(urls))
 
 
