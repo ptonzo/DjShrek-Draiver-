@@ -174,7 +174,7 @@ class MainWindow(QMainWindow):
         self.language = self.settings_store.value("language", system_language(), type=str)
         if self.language not in LANGUAGES:
             self.language = system_language()
-        self.setWindowTitle("DjShrek-Draiver Cyber Club")
+        self.setWindowTitle("DjShrek Draiver")
         self.resize(1320, 860)
         self.devices: list[Device] = []
         self.updates: list[DriverUpdate] = []
@@ -190,7 +190,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(root)
         header = QHBoxLayout()
         brand = QVBoxLayout()
-        title = QLabel("DjShrek-Draiver Cyber Club")
+        title = QLabel("DjShrek Draiver")
         title.setObjectName("title")
         subtitle = QLabel("NEON GAMING  /  PC CONTROL CENTER")
         subtitle.setObjectName("subtitle")
