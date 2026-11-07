@@ -66,7 +66,7 @@ def test_catalog_parser_extracts_version_and_date_separately(monkeypatch):
       <td>Example Device Driver</td>
       <td>2.14.0.7</td>
       <td>11/05/2026</td>
-      <td><a onclick="downloadUpdate('12345678-1234-1234-1234-123456789abc')">Download</a></td>
+      <td><a onclick="downloadUpdate('updateID=12345678-1234-1234-1234-123456789abc')">Download</a></td>
     </tr></table>
     """
     monkeypatch.setattr(driver_catalog, "_request", lambda *args, **kwargs: page)
