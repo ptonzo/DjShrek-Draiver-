@@ -1,4 +1,4 @@
-"""Conservative Windows Registry diagnostics for stale startup entries."""
+"""Safe diagnostics and backup-first removal for Windows startup registry entries."""
 from __future__ import annotations
 
 import os
@@ -11,7 +11,7 @@ from pathlib import Path
 
 try:
     import winreg
-except ImportError:  # Keep module importable for static checks on non-Windows hosts.
+except ImportError:
     winreg = None
 
 
@@ -47,66 +47,67 @@ def _command_executable(command: str) -> str | None:
     return text.split()[0] if text.split() else None
 
 
+def _finding(hive: str, subkey: str, name: str, data: str, issue: str,
+             severity: str = "Предупреждение", repairable: bool = False) -> RegistryFinding:
+    return RegistryFinding(hive, subkey, name, data, issue, severity, repairable)
+
+
 def scan_registry() -> list[RegistryFinding]:
+    """Inspect all four standard Run/RunOnce locations, without changing the registry."""
     if sys.platform != "win32" or winreg is None:
         raise OSError("Проверка реестра доступна только в Windows 10/11.")
     findings: list[RegistryFinding] = []
     for hive_name, hive, subkey in _STARTUP_KEYS:
         try:
-            with winreg.OpenKey(hive, subkey, 0, winreg.KEY_READ) as key:
-                index = 0
-                while True:
-                    try:
-                        value_name, value_data, _ = winreg.EnumValue(key, index)
-                    except OSError:
-                        break
-                    index += 1
-                    if not isinstance(value_data, str):
-                        continue
-                    target = _command_executable(value_data)
-                    if not target:
-                        findings.append(RegistryFinding(
-                            hive_name, subkey, value_name, value_data,
-                            "Не удалось определить исполняемый файл; автоматическое исправление запрещено."
-                        ))
-                        continue
-                    expanded = os.path.expandvars(target.strip().strip('"'))
-                    if expanded.startswith((r"\\", "shell:", "ms-settings:", "http:", "https:")):
-                        continue
-                    if not os.path.isabs(expanded):
-                        findings.append(RegistryFinding(
-                            hive_name, subkey, value_name, value_data,
-                            "Путь запуска относительный или не распознан; требуется ручная проверка."
-                        ))
-                        continue
-                    if not Path(expanded).is_file():
-                        findings.append(RegistryFinding(
-                            hive_name, subkey, value_name, value_data,
-                            f"Файл автозапуска не найден: {expanded}", "Ошибка", hive_name == "HKCU"
-                        ))
+            key = winreg.OpenKey(hive, subkey, 0, winreg.KEY_READ)
         except FileNotFoundError:
             continue
         except PermissionError:
-            findings.append(RegistryFinding(
-                hive_name, subkey, "", "",
-                "Нет доступа для чтения раздела; запустите программу с правами администратора для полной проверки."
-            ))
+            findings.append(_finding(hive_name, subkey, "", "",
+                "Нет доступа для чтения раздела. Для HKLM может потребоваться запуск от администратора."))
+            continue
         except OSError as exc:
-            findings.append(RegistryFinding(
-                hive_name, subkey, "", "", f"Не удалось прочитать раздел: {exc}"
-            ))
+            findings.append(_finding(hive_name, subkey, "", "", f"Ошибка чтения раздела: {exc}"))
+            continue
+        with key:
+            index = 0
+            while True:
+                try:
+                    value_name, value_data, value_type = winreg.EnumValue(key, index)
+                except OSError:
+                    break
+                index += 1
+                if not isinstance(value_data, str) or not value_data.strip():
+                    findings.append(_finding(hive_name, subkey, value_name, str(value_data),
+                        "Пустое или неподдерживаемое значение автозапуска.", "Ошибка", hive_name == "HKCU"))
+                    continue
+                target = _command_executable(value_data)
+                if not target:
+                    findings.append(_finding(hive_name, subkey, value_name, value_data,
+                        "Не удалось разобрать команду запуска; требуется ручная проверка."))
+                    continue
+                expanded = os.path.expandvars(target.strip().strip('"'))
+                if expanded.startswith((r"\\", "shell:", "ms-settings:", "http:", "https:")):
+                    continue
+                if not os.path.isabs(expanded):
+                    findings.append(_finding(hive_name, subkey, value_name, value_data,
+                        "Путь запуска относительный или не распознан; требуется ручная проверка."))
+                    continue
+                if not Path(expanded).is_file():
+                    findings.append(_finding(hive_name, subkey, value_name, value_data,
+                        f"Файл автозапуска не найден: {expanded}", "Ошибка", hive_name == "HKCU"))
     return findings
 
 
-def repair_stale_startup_entry(finding: RegistryFinding) -> str:
-    """Export the containing Run key, then remove one unchanged stale value."""
+def delete_startup_entry(finding: RegistryFinding) -> str:
+    """Export the exact Run/RunOnce key, then delete only the unchanged selected value."""
     if sys.platform != "win32" or winreg is None:
-        raise OSError("Исправление доступно только в Windows.")
-    if not finding.repairable or finding.hive not in ("HKCU", "HKLM"):
-        raise ValueError("Эта запись не поддерживает автоматическое исправление.")
+        raise OSError("Удаление записей доступно только в Windows.")
+    if finding.hive not in ("HKCU", "HKLM") or not finding.value_name:
+        raise ValueError("Можно удалить только конкретную запись автозапуска.")
     allowed = {(name, path) for name, _, path in _STARTUP_KEYS}
     if (finding.hive, finding.subkey) not in allowed:
-        raise ValueError("Раздел реестра не входит в список безопасного исправления.")
+        raise ValueError("Раздел реестра не входит в список разрешённых Run/RunOnce.")
     hive = winreg.HKEY_CURRENT_USER if finding.hive == "HKCU" else winreg.HKEY_LOCAL_MACHINE
     backup_dir = Path(tempfile.gettempdir()) / "DjShrek-Registry-Backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -114,10 +115,8 @@ def repair_stale_startup_entry(finding: RegistryFinding) -> str:
     backup_file = backup_dir / f"registry-{finding.hive}-{safe_name}.reg"
     root = "HKEY_CURRENT_USER" if finding.hive == "HKCU" else "HKEY_LOCAL_MACHINE"
     full_key = root + "\\" + finding.subkey
-    result = subprocess.run(
-        ["reg.exe", "export", full_key, str(backup_file), "/y"],
-        capture_output=True, text=True, check=False
-    )
+    result = subprocess.run(["reg.exe", "export", full_key, str(backup_file), "/y"],
+        capture_output=True, text=True, check=False, encoding="utf-8", errors="replace")
     if result.returncode != 0 or not backup_file.is_file():
         raise OSError("Не удалось создать резервную копию реестра: " + (result.stderr or result.stdout))
     with winreg.OpenKey(hive, finding.subkey, 0, winreg.KEY_SET_VALUE) as key:
@@ -126,3 +125,9 @@ def repair_stale_startup_entry(finding: RegistryFinding) -> str:
             raise RuntimeError("Запись изменилась после проверки. Выполните сканирование повторно.")
         winreg.DeleteValue(key, finding.value_name)
     return str(backup_file)
+
+
+def repair_stale_startup_entry(finding: RegistryFinding) -> str:
+    if not finding.repairable:
+        raise ValueError("Эта запись не поддерживает автоматическое исправление.")
+    return delete_startup_entry(finding)
