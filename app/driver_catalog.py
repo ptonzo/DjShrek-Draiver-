@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import html
 import json
-import os
 import platform
 import re
 import subprocess
@@ -66,7 +65,7 @@ def _hardware_match(candidate_ids: list[str], device_id: str) -> bool:
     for raw_id in candidate_ids:
         candidate = str(raw_id or "").strip().casefold()
         if candidate and device.startswith(candidate):
-            if len(device) == len(candidate) or device[len(candidate)] in {"&", "\\\\"}:
+            if len(device) == len(candidate) or device[len(candidate)] in {"&", "\\"}:
                 return True
     return False
 
@@ -130,6 +129,10 @@ def install_driver_updates(updates: list[dict[str, Any]]) -> list[dict[str, Any]
                 if package.suffix.lower() == ".zip":
                     try:
                         with zipfile.ZipFile(package) as archive:
+                            for member in archive.infolist():
+                                destination = (extracted / member.filename).resolve()
+                                if extracted.resolve() not in destination.parents and destination != extracted.resolve():
+                                    raise DriverCatalogError("ZIP содержит небезопасный путь.")
                             archive.extractall(extracted)
                     except (OSError, zipfile.BadZipFile) as exc:
                         raise DriverCatalogError(f"Повреждён ZIP-пакет: {exc}") from exc
