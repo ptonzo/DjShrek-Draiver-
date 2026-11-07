@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSettings
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+    QApplication, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
     QWidget, QHeaderView, QTabWidget, QGridLayout, QProgressBar, QFrame, QComboBox,
 )
@@ -151,7 +151,7 @@ class MainWindow(QMainWindow):
     device_headers = ["Устройство", "Производитель", "Состояние", "Класс", "Версия драйвера", "Дата драйвера"]
     update_headers = ["Доступный драйвер", "Описание", "Загружен"]
 
-    def __init__(self):
+    def __init__(self, initial_devices=None, initial_updates=None):
         super().__init__()
         self.settings_store = QSettings("DjShrek", "CyberClub")
         self.language = self.settings_store.value("language", system_language(), type=str)
@@ -197,6 +197,11 @@ class MainWindow(QMainWindow):
         self.apply_language()
 
         self.apply_theme()
+        if initial_devices is not None:
+            self.devices = list(initial_devices)
+            self.render_devices()
+        if initial_updates is not None:
+            self.on_catalog_updates_found(list(initial_updates))
 
         self.telemetry_timer = QTimer(self)
         self.telemetry_timer.setInterval(2500)
@@ -1000,10 +1005,102 @@ class MainWindow(QMainWindow):
         self.status.setText(f"Автопроверка обновления программы недоступна: {message}")
 
 
+class StartupScanDialog(QDialog):
+    """Mandatory startup scan: inventory hardware and query the independent web catalog."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("DjShrek-Draiver — первичное сканирование")
+        self.setMinimumSize(720, 420)
+        self.devices, self.updates = [], []
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(36, 32, 36, 32)
+        layout.setSpacing(18)
+        title = QLabel("DjShrek Driver")
+        title.setObjectName("title")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle = QLabel("ПЕРВИЧНАЯ ДИАГНОСТИКА И ПОИСК ДРАЙВЕРОВ")
+        subtitle.setObjectName("subtitle")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        explanation = QLabel("Определение оборудования, чтение установленных версий и поиск совместимых пакетов. Windows Update не используется.")
+        explanation.setWordWrap(True)
+        explanation.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 0)
+        self.progress.hide()
+        self.status_label = QLabel("Сканирование ещё не запускалось.")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.scan_button = QPushButton("СКАНИРОВАТЬ СИСТЕМУ")
+        self.scan_button.setMinimumHeight(76)
+        self.scan_button.setObjectName("primaryScanButton")
+        self.scan_button.clicked.connect(self.start_scan)
+        layout.addStretch(1)
+        for widget in (title, subtitle, explanation, self.progress, self.status_label, self.scan_button):
+            layout.addWidget(widget)
+        layout.addStretch(1)
+        self.setStyleSheet("""
+            QDialog { background: #0b0d14; }
+            QLabel { color: #edf3ff; font-size: 11pt; }
+            QLabel#title { font-size: 34pt; font-weight: 900; color: #ffffff; }
+            QLabel#subtitle { color: #00dfff; font-size: 10pt; font-weight: 900; }
+            QPushButton#primaryScanButton { background: #713bd1; color: white; border: 2px solid #00dfff;
+                border-radius: 14px; font-size: 18pt; font-weight: 900; padding: 18px; }
+            QPushButton:disabled { background: #343746; color: #9aa3b5; }
+            QProgressBar { min-height: 12px; border: 1px solid #00dfff; border-radius: 6px; }
+            QProgressBar::chunk { background: #713bd1; }
+        """)
+
+    def start_scan(self):
+        if sys.platform != "win32":
+            self.status_label.setText("Для сканирования требуется Windows 10/11.")
+            return
+        self.scan_button.setEnabled(False)
+        self.progress.show()
+        self.status_label.setText("Этап 1/2: определение устройств и установленных драйверов…")
+        self.scan_worker = ScanWorker(self)
+        self.scan_worker.completed.connect(self.on_devices_found)
+        self.scan_worker.failed.connect(self.on_scan_failed)
+        self.scan_worker.start()
+
+    def on_devices_found(self, devices):
+        self.devices = devices
+        self.status_label.setText(f"Устройств обнаружено: {len(devices)}. Этап 2/2: поиск пакетов в веб-каталоге…")
+        self.catalog_worker = CatalogSearchWorker(devices, self)
+        self.catalog_worker.completed.connect(self.on_catalog_found)
+        self.catalog_worker.failed.connect(self.on_catalog_failed)
+        self.catalog_worker.start()
+
+    def on_catalog_found(self, updates):
+        self.updates = updates
+        self._ready()
+
+    def on_scan_failed(self, message):
+        self.progress.hide()
+        self.status_label.setText("Сканирование не завершено: " + message)
+        self.scan_button.setEnabled(True)
+
+    def on_catalog_failed(self, message):
+        self.updates = []
+        self._ready("Каталог недоступен: " + message)
+
+    def _ready(self, note=""):
+        self.progress.hide()
+        self.status_label.setText(f"Сканирование завершено. Устройств: {len(self.devices)}; предложений каталога: {len(self.updates)}. {note}")
+        self.scan_button.setText("ОТКРЫТЬ ПРОГРАММУ")
+        self.scan_button.setEnabled(True)
+        try:
+            self.scan_button.clicked.disconnect()
+        except RuntimeError:
+            pass
+        self.scan_button.clicked.connect(self.accept)
+
+
 def main():
     if sys.platform != "win32":
         print("DjShrek Draiver предназначен для Windows 10/11.")
     app = QApplication(sys.argv)
-    window = MainWindow()
+    gate = StartupScanDialog()
+    if gate.exec() != QDialog.DialogCode.Accepted:
+        return 0
+    window = MainWindow(initial_devices=gate.devices, initial_updates=gate.updates)
     window.show()
     return app.exec()
