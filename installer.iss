@@ -46,7 +46,7 @@ Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\DjShrek-Draiver Cyber Club"; Filename: "{app}\DjShrek-Draiver Cyber Club.exe"; IconFilename: "{app}\DjShrek-Draiver.ico"
-Name: "{autodesktop}\DjShrek-Draiver Cyber Club"; Filename: "{app}\DjShrek-Draiver Cyber Club.exe"; IconFilename: "{app}\DjShrek-Draiver Cyber Club.exe"; Tasks: desktopicon
+Name: "{autodesktop}\DjShrek-Draiver Cyber Club"; Filename: "{app}\DjShrek-Draiver Cyber Club.exe"; IconFilename: "{app}\\DjShrek-Draiver.ico"; Tasks: desktopicon
 
 [InstallDelete]
 Type: files; Name: "{autodesktop}\DjShrek Draiver.lnk"
