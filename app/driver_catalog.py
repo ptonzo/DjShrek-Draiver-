@@ -60,7 +60,7 @@ def _catalog_search(hardware_id: str) -> list[dict[str, str]]:
         if not plain:
             continue
 
-        title = cell_text[0] if cell_text else plain[:500]
+        title = cell_text[0] if len(cell_text) > 1 else plain[:500]
         # Catalog columns vary by locale/layout; only publish a version/date
         # when a cell has an unambiguous value rather than guessing.
         version = next(
