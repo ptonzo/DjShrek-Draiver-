@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from datetime import datetime
-from datetime import datetime
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSettings
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
@@ -357,25 +356,16 @@ class MainWindow(QMainWindow):
         ])
         self.configure_table(self.update_table)
         update_layout.addWidget(self.update_table, 1)
-        note = QLabel("Поиск совместимых драйверов выполняется через службу Microsoft Update Catalog; обычное автоматическое обновление Windows не включается. Выбранные пакеты сначала сохраняются в резервную копию, затем загружаются и устанавливаются средствами Microsoft Update Agent.")\n\n"
-            "Программа закроется на время замены файлов и автоматически запустится снова. "
-            "Ваши настройки и сохранённая лицензия не удаляются.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
+        note = QLabel(
+            "Поиск совместимых драйверов выполняется через службу Microsoft Update Catalog. "
+            "Обычное автоматическое обновление Windows не включается. Выбранные текущие пакеты "
+            "сначала экспортируются в резервную копию, затем выбранные предложения загружаются "
+            "и устанавливаются средствами Microsoft Update Agent."
         )
-        if answer == QMessageBox.StandardButton.Yes:
-            try:
-                download_and_schedule(update)
-            except UpdateError as exc:
-                QMessageBox.warning(self, "Обновление", str(exc))
-                return
-            QApplication.quit()
-        else:
-            self.status.setText(f"Доступно обновление {update['version']}; установка отложена.")
-
-    def on_app_update_check_failed(self, message):
-        self.status.setText("Не удалось проверить обновления программы.")
-        self.event_log.appendPlainText(message)
+        note.setWordWrap(True)
+        note.setObjectName("hint")
+        update_layout.addWidget(note)
+        self.tabs.addTab(update_tab, "Обновления драйверов")
 
     def build_registry_tab(self):
         tab = QWidget()
