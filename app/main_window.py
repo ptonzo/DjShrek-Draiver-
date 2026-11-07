@@ -357,32 +357,7 @@ class MainWindow(QMainWindow):
         ])
         self.configure_table(self.update_table)
         update_layout.addWidget(self.update_table, 1)
-        note = QLabel("Windows Update не используется. DjShrek проверяет наличие официальных утилит Intel DSA, AMD Auto-Detect / AMD Software и Dell Command | Update. Если утилита отсутствует, программа предложит открыть официальный сайт для её установки. Intel и AMD выполняют поиск в собственных официальных интерфейсах; Dell Command | Update поддерживает сканирование через официальный CLI. Установка обновлений не запускается без отдельного подтверждения пользователя.")
-        note.setWordWrap(True)
-        note.setObjectName("hint")
-        update_layout.addWidget(note)
-        self.tabs.addTab(update_tab, "Обновления драйверов")
-
-
-    def check_application_updates(self):
-        if not getattr(sys, "frozen", False):
-            return
-        if self.update_check_worker is not None and self.update_check_worker.isRunning():
-            return
-        self.status.setText("Проверка обновлений DjShrek-Draiver…")
-        self.update_check_worker = UpdateCheckWorker(self)
-        self.update_check_worker.completed.connect(self.on_app_update_checked)
-        self.update_check_worker.failed.connect(self.on_app_update_check_failed)
-        self.update_check_worker.start()
-
-    def on_app_update_checked(self, update):
-        if not update:
-            self.status.setText("Установлена последняя опубликованная версия DjShrek-Draiver.")
-            return
-        self.pending_app_update = update
-        answer = QMessageBox.question(
-            self, "Доступно обновление DjShrek-Draiver",
-            f"Доступна версия {update['version']}. Скачать и установить обновление сейчас?\n\n"
+        note = QLabel("Поиск совместимых драйверов выполняется через службу Microsoft Update Catalog; обычное автоматическое обновление Windows не включается. Выбранные пакеты сначала сохраняются в резервную копию, затем загружаются и устанавливаются средствами Microsoft Update Agent.")\n\n"
             "Программа закроется на время замены файлов и автоматически запустится снова. "
             "Ваши настройки и сохранённая лицензия не удаляются.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
