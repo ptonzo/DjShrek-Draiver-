@@ -158,9 +158,6 @@ class MainWindow(QMainWindow):
         brand.addWidget(title)
         brand.addWidget(subtitle)
         header.addLayout(brand, 1)
-        self.refresh_button = QPushButton("Обновить мониторинг")
-        self.refresh_button.clicked.connect(self.refresh_telemetry)
-        header.addWidget(self.refresh_button)
         layout.addLayout(header)
 
         self.tabs = QTabWidget()
@@ -190,7 +187,10 @@ class MainWindow(QMainWindow):
             QLabel#metricDetail { color: #a7b7d7; font-size: 9pt; }
             QLabel#sectionTitle { color: #d7c5ff; font-size: 13pt; font-weight: 900; padding: 5px 0; }
             QFrame#metricCard, QFrame#infoCard { background: #101326; border: 1px solid #493274; border-radius: 11px; }
-            QLineEdit, QTableWidget, QPlainTextEdit { background: #0e1222; border: 1px solid #34365c; border-radius: 8px; padding: 9px; color: #f2f0ff; selection-background-color: #6d42bd; }
+            QLineEdit, QTableWidget, QPlainTextEdit, QComboBox { background: #0e1222; border: 1px solid #34365c; border-radius: 8px; padding: 9px; color: #f2f0ff; selection-background-color: #6d42bd; }
+            QComboBox QAbstractItemView { background: #151a30; color: #f2f0ff; selection-background-color: #7048b8; selection-color: #ffffff; border: 1px solid #7048b8; outline: 0; }
+            QMessageBox { background: #101326; }
+            QMessageBox QLabel { color: #f2f0ff; min-width: 360px; }
             QLineEdit:focus { border: 1px solid #00e5ff; }
             QHeaderView::section { background: #1b1c36; color: #d7c5ff; padding: 10px; border: 0; border-bottom: 1px solid #7048b8; font-weight: 800; }
             QTableWidget { alternate-background-color: #151a30; gridline-color: #2d3150; }
@@ -303,10 +303,9 @@ class MainWindow(QMainWindow):
         update_controls.addWidget(self.update_search_button, 2)
         update_controls.addWidget(self.vendor_tools_button, 1)
         update_layout.addLayout(update_controls)
-        self.update_table = QTableWidget(0, 6)
+        self.update_table = QTableWidget(0, 4)
         self.update_table.setHorizontalHeaderLabels([
-            "Устройство", "Производитель", "Версия драйвера", "Дата драйвера",
-            "Официальный источник", "Переход"
+            "Выбрать", "Устройство", "Версия драйвера", "Дата драйвера"
         ])
         self.configure_table(self.update_table)
         update_layout.addWidget(self.update_table, 1)
@@ -653,7 +652,7 @@ class MainWindow(QMainWindow):
             self.tabs.setTabText(i, translate(self.language, source))
         table_headers = [
             (self.device_table, self.device_headers),
-            (self.update_table, ["Устройство", "Производитель", "Версия драйвера", "Дата драйвера", "Официальный источник", "Переход"]),
+            (self.update_table, ["Выбрать", "Устройство", "Версия драйвера", "Дата драйвера"]),
         ]
         for table, headers in table_headers:
             for col, source in enumerate(headers):
@@ -677,7 +676,6 @@ class MainWindow(QMainWindow):
         if self._telemetry_busy or sys.platform != "win32":
             return
         self._telemetry_busy = True
-        self.refresh_button.setEnabled(False)
         self.telemetry_worker = TelemetryWorker(self)
         self.telemetry_worker.completed.connect(self.on_telemetry_finished)
         self.telemetry_worker.failed.connect(self.on_telemetry_failed)
@@ -686,7 +684,6 @@ class MainWindow(QMainWindow):
 
     def on_telemetry_worker_finished(self):
         self._telemetry_busy = False
-        self.refresh_button.setEnabled(True)
 
     def on_telemetry_finished(self, snapshot: SystemSnapshot):
         self.cpu_card.set_metric(f"{snapshot.cpu_percent:.0f}%", snapshot.cpu_percent, f"{snapshot.cpu_name}")
@@ -814,25 +811,17 @@ class MainWindow(QMainWindow):
         self.render_devices()
         self.update_table.setRowCount(len(devices))
         for row, device in enumerate(devices):
-            source = source_for_device(device)
-            values = [
-                device.name,
-                device.manufacturer or device.driver_provider or "Не определён",
-                device.driver_version or "Нет данных",
-                device.driver_date or "Нет данных",
-                source.name if source else "Производитель не поддержан",
-            ]
-            for col, value in enumerate(values):
+            choice = QTableWidgetItem()
+            choice.setFlags(choice.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            choice.setCheckState(Qt.CheckState.Unchecked)
+            choice.setData(Qt.ItemDataRole.UserRole, device)
+            self.update_table.setItem(row, 0, choice)
+            for col, value in enumerate([
+                device.name, device.driver_version or "Нет данных", device.driver_date or "Нет данных"
+            ], start=1):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
                 self.update_table.setItem(row, col, item)
-            if source:
-                action = QPushButton("Открыть официальный сайт")
-                action.setToolTip(source.method)
-                action.clicked.connect(lambda checked=False, url=source.url: open_official_source(url))
-                self.update_table.setCellWidget(row, 5, action)
-            else:
-                self.update_table.setItem(row, 5, QTableWidgetItem("Нет ссылки"))
         self.update_table.resizeRowsToContents()
         self.status.setText(
             f"Проверено устройств: {len(devices)}. Версии и даты считаны из подписанных драйверов Windows. "
