@@ -40,11 +40,12 @@ Name: "desktopicon"; Description: "Создать ярлык на рабочем
 
 [Files]
 Source: "dist\DjShrek-Draiver Cyber Club\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "assets\DjShrek-Draiver.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\DjShrek-Draiver Cyber Club"; Filename: "{app}\DjShrek-Draiver Cyber Club.exe"; IconFilename: "{app}\DjShrek-Draiver Cyber Club.exe"
+Name: "{group}\DjShrek-Draiver Cyber Club"; Filename: "{app}\DjShrek-Draiver Cyber Club.exe"; IconFilename: "{app}\DjShrek-Draiver.ico"
 Name: "{autodesktop}\DjShrek-Draiver Cyber Club"; Filename: "{app}\DjShrek-Draiver Cyber Club.exe"; IconFilename: "{app}\DjShrek-Draiver Cyber Club.exe"; Tasks: desktopicon
 
 [InstallDelete]
