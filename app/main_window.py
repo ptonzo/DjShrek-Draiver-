@@ -14,7 +14,6 @@ from app.scanner import Device, ScanError, scan_devices
 from app.driver_backup import DriverBackupError, backup_driver_store, backup_selected_driver_packages, restore_driver_store
 from app.driver_catalog import DriverCatalogError, search_driver_updates, install_driver_updates
 from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot
-from app.driver_sources import source_for_device, open_official_source
 from app.i18n import LANGUAGES, system_language, translate
 from app.updater import check_latest_release, download_and_schedule, UpdateError
 from app.registry_checker import RegistryFinding, scan_registry, repair_stale_startup_entry
@@ -302,10 +301,9 @@ class MainWindow(QMainWindow):
         self.configure_table(self.update_table)
         update_layout.addWidget(self.update_table, 1)
         note = QLabel(
-            "Поиск совместимых драйверов выполняется через службу Microsoft Update Catalog. "
-            "Обычное автоматическое обновление Windows не включается. Выбранные текущие пакеты "
-            "сначала экспортируются в резервную копию, затем выбранные предложения загружаются "
-            "и устанавливаются средствами Microsoft Update Agent."
+            "Программа самостоятельно обращается к веб-каталогу пакетов по идентификаторам оборудования, "
+            "скачивает CAB/ZIP по HTTPS и устанавливает INF-пакеты через pnputil. "
+            "Служба Windows Update и Microsoft Update Agent не используются."
         )
         note.setWordWrap(True)
         note.setObjectName("hint")
@@ -865,7 +863,7 @@ class MainWindow(QMainWindow):
         if self.update_worker is not None and self.update_worker.isRunning():
             return
         self.update_search_button.setEnabled(False)
-        self.status.setText("Сканирование устройств и поиск совместимых драйверов в Microsoft Update Catalog…")
+        self.status.setText("Сканирование устройств и поиск пакетов в независимом веб-каталоге…")
         self.update_worker = ScanWorker(self)
         self.update_worker.completed.connect(self.on_devices_for_catalog)
         self.update_worker.failed.connect(self.on_update_error)
@@ -875,7 +873,7 @@ class MainWindow(QMainWindow):
     def on_devices_for_catalog(self, devices):
         self.devices = devices
         self.render_devices()
-        self.status.setText("Устройства найдены. Запрос каталога Microsoft Update…")
+        self.status.setText("Устройства найдены. Поиск пакетов по Hardware ID…")
         self.catalog_worker = CatalogSearchWorker(devices, self)
         self.catalog_worker.completed.connect(self.on_catalog_updates_found)
         self.catalog_worker.failed.connect(self.on_update_error)
@@ -901,9 +899,9 @@ class MainWindow(QMainWindow):
                 item.setToolTip(str(value))
                 self.update_table.setItem(row, col, item)
         self.update_table.resizeRowsToContents()
-        self.status.setText(f"Каталог Microsoft Update: найдено совместимых предложений драйверов — {len(updates)}. Обычный Windows Update не запускался.")
+        self.status.setText(f"Веб-каталог: найдено совпадений по Hardware ID — {len(updates)}. Обычный Windows Update не запускался.")
         if not updates:
-            QMessageBox.information(self, "Проверка драйверов", "В каталоге Microsoft не найдено новых предложений, точно совпадающих с идентификаторами оборудования. Установленные драйверы не изменялись.")
+            QMessageBox.information(self, "Проверка драйверов", "В веб-каталоге не найдено пакетов, совпадающих с идентификаторами оборудования. Установленные драйверы не изменялись.")
 
     def select_all_update_rows(self):
         for row in range(self.update_table.rowCount()):
