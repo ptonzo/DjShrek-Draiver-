@@ -89,7 +89,16 @@ def search_driver_updates(devices: list[Any]) -> list[dict[str, Any]]:
                 if _hardware_match([hardware_id], getattr(device, "device_id", "")):
                     offer["MatchedDevices"].append(device.name)
                     offer["MatchedDeviceIds"].append(device.device_id)
-            results[offer_id] = offer
+            existing = results.get(offer_id)
+            if existing is None:
+                results[offer_id] = offer
+            else:
+                # One catalog offer can be returned for several hardware IDs.
+                # Merge matches instead of overwriting devices found earlier.
+                for field in ("MatchedDevices", "MatchedDeviceIds", "HardwareIds"):
+                    for value in offer[field]:
+                        if value not in existing[field]:
+                            existing[field].append(value)
     return list(results.values())
 
 
