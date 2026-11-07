@@ -39,6 +39,26 @@ jobs:
           if (!(Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
           & $iscc installer.iss
           if (!(Test-Path "dist\installer\DjShrek-Draiver-Setup.exe")) { throw "Installer EXE was not created" }
+      - name: Smoke-test packaged application and installer
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $app = (Resolve-Path "dist\DjShrek-Draiver Cyber Club\DjShrek-Draiver Cyber Club.exe").Path
+          $process = Start-Process -FilePath $app -PassThru
+          Start-Sleep -Seconds 8
+          if ($process.HasExited) { throw "Packaged application exited during startup smoke test (code $($process.ExitCode))" }
+          Stop-Process -Id $process.Id -Force
+          $testDir = Join-Path $env:TEMP "DjShrek-Installer-Smoke"
+          $setup = (Resolve-Path "dist\installer\DjShrek-Draiver-Setup.exe").Path
+          Start-Process -FilePath $setup -ArgumentList @("/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/NOICONS",("/DIR=" + $testDir)) -Wait
+          $installed = Join-Path $testDir "DjShrek-Draiver Cyber Club.exe"
+          if (!(Test-Path $installed)) { throw "Silent installation did not place the application executable" }
+          if (!(Test-Path "HKLM:\Software\DjShrek\CyberClub\License")) { throw "License registry location was not created" }
+          $uninstaller = Join-Path $testDir "unins000.exe"
+          if (!(Test-Path $uninstaller)) { throw "Uninstaller was not created" }
+          Start-Process -FilePath $uninstaller -ArgumentList @("/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART") -Wait
+          if (Test-Path $testDir) { throw "Silent uninstall left the installation directory behind" }
+          if (!(Test-Path "HKLM:\Software\DjShrek\CyberClub\License")) { throw "Persistent license registry location was removed during uninstall" }
       - uses: actions/upload-artifact@v4
         with:
           name: DjShrek-Draiver-Setup-Windows-x64
