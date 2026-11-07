@@ -14,14 +14,9 @@ class DriverCatalogError(RuntimeError):
 
 _SEARCH_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
-$serviceId = '7971f918-a847-4430-9279-4a52d1efe18d'
-$manager = New-Object -ComObject Microsoft.Update.ServiceManager
-$registered = @($manager.Services | ForEach-Object { [string]$_.ServiceID })
-if ($serviceId -notin $registered) { [void]$manager.AddService2($serviceId, 3, $null) }
 $session = New-Object -ComObject Microsoft.Update.Session
 $searcher = $session.CreateUpdateSearcher()
-$searcher.ServerSelection = 3
-$searcher.ServiceID = $serviceId
+$searcher.ServerSelection = 2
 $result = $searcher.Search("IsInstalled=0 and Type='Driver' and IsHidden=0")
 $rows = @()
 foreach ($u in $result.Updates) {
