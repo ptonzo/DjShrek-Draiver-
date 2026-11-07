@@ -125,10 +125,17 @@ def _run_powershell(script: str, timeout: int = 1800, env: dict[str, str] | None
 
 
 def _hardware_match(candidate_ids: list[str], device_id: str) -> bool:
-    device = (device_id or "").casefold()
+    """Match a complete PnP hardware-ID component, not an arbitrary text prefix."""
+    device = (device_id or "").strip().casefold()
     if not device:
         return False
-    return any(device.startswith(str(hardware_id).casefold()) for hardware_id in candidate_ids if hardware_id)
+    for raw_id in candidate_ids:
+        candidate = str(raw_id or "").strip().casefold()
+        if not candidate or not device.startswith(candidate):
+            continue
+        if len(device) == len(candidate) or device[len(candidate)] in {"&", "\\"}:
+            return True
+    return False
 
 
 def search_driver_updates(devices: list[Any]) -> list[dict[str, Any]]:
