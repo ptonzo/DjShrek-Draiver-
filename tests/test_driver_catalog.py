@@ -58,3 +58,21 @@ def test_install_rejects_empty_list(monkeypatch):
         assert "Не выбраны" in str(exc)
     else:
         raise AssertionError("empty selection must be rejected")
+
+
+def test_catalog_parser_extracts_version_and_date_separately(monkeypatch):
+    page = """
+    <table><tr>
+      <td>Example Device Driver</td>
+      <td>2.14.0.7</td>
+      <td>11/05/2026</td>
+      <td><a onclick="downloadUpdate('12345678-1234-1234-1234-123456789abc')">Download</a></td>
+    </tr></table>
+    """
+    monkeypatch.setattr(driver_catalog, "_request", lambda *args, **kwargs: page)
+
+    offers = driver_catalog._catalog_search("PCI\\\\VEN_1234&DEV_5678")
+
+    assert len(offers) == 1
+    assert offers[0]["Version"] == "2.14.0.7"
+    assert offers[0]["Date"] == "11/05/2026"
