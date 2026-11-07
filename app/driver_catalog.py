@@ -1,172 +1,153 @@
 from __future__ import annotations
 
+import html
 import json
+import os
 import platform
+import re
 import subprocess
+import tempfile
+import urllib.parse
+import urllib.request
+import zipfile
+from pathlib import Path
 from typing import Any
 
-MICROSOFT_UPDATE_SERVICE_ID = "7971f918-a847-4430-9279-4a52d1efe18d"
+CATALOG_URL = "https://www.catalog.update.microsoft.com/Search.aspx"
+USER_AGENT = "DjShrek-Draiver/1.0 (Windows driver catalog client)"
 
 
 class DriverCatalogError(RuntimeError):
     pass
 
 
-_SEARCH_SCRIPT = r"""
-$ErrorActionPreference = 'Stop'
-$session = New-Object -ComObject Microsoft.Update.Session
-$searcher = $session.CreateUpdateSearcher()
-$searcher.ServerSelection = 2
-$result = $searcher.Search("IsInstalled=0 and Type='Driver' and IsHidden=0")
-$rows = @()
-foreach ($u in $result.Updates) {
-  $ids = @()
-  $version = ''
-  $date = ''
-  $model = ''
-  $manufacturer = ''
-  try { $ids = @($u.DriverHardwareID) } catch {}
-  try { $version = [string]$u.DriverVersion } catch {}
-  try { $date = ([datetime]$u.DriverVerDate).ToString('yyyy-MM-dd') } catch {}
-  try { $model = [string]$u.DriverModel } catch {}
-  try { $manufacturer = [string]$u.DriverManufacturer } catch {}
-  $rows += [pscustomobject]@{
-    UpdateId = [string]$u.Identity.UpdateID
-    Revision = [int]$u.Identity.RevisionNumber
-    Title = [string]$u.Title
-    Description = [string]$u.Description
-    HardwareIds = $ids
-    Version = $version
-    Date = $date
-    Model = $model
-    Manufacturer = $manufacturer
-    EulaAccepted = [bool]$u.EulaAccepted
-    IsDownloaded = [bool]$u.IsDownloaded
-  }
-}
-ConvertTo-Json -InputObject @($rows) -Depth 6 -Compress
-"""
-
-
-_INSTALL_SCRIPT = r"""
-$ErrorActionPreference = 'Stop'
-$ids = ConvertFrom-Json -InputObject $env:DJSHREK_UPDATE_IDS
-$session = New-Object -ComObject Microsoft.Update.Session
-$searcher = $session.CreateUpdateSearcher()
-$searcher.ServerSelection = 2
-$available = $searcher.Search("IsInstalled=0 and Type='Driver' and IsHidden=0")
-$collection = New-Object -ComObject Microsoft.Update.UpdateColl
-foreach ($identity in $ids) {
-  $found = $false
-  foreach ($u in $available.Updates) {
-    if ([string]$u.Identity.UpdateID -eq [string]$identity.UpdateId -and
-        [int]$u.Identity.RevisionNumber -eq [int]$identity.Revision) {
-      if (-not $u.EulaAccepted) { $u.AcceptEula() }
-      [void]$collection.Add($u)
-      $found = $true
-      break
-    }
-  }
-  if (-not $found) { throw "Обновление больше не доступно: $($identity.UpdateId)" }
-}
-if ($collection.Count -eq 0) { throw 'Не выбраны обновления.' }
-$downloader = $session.CreateUpdateDownloader()
-$downloader.Updates = $collection
-$downloadResult = $downloader.Download()
-if ($downloadResult.ResultCode -notin 2,3) { throw "Загрузка не завершена. Код: $($downloadResult.ResultCode)" }
-for ($i = 0; $i -lt $collection.Count; $i++) {
-  if (-not $collection.Item($i).IsDownloaded) { throw "Пакет не загружен: $($collection.Item($i).Title)" }
-}
-$installer = $session.CreateUpdateInstaller()
-$installer.Updates = $collection
-$installer.ForceQuiet = $true
-$installResult = $installer.Install()
-$results = @()
-for ($i = 0; $i -lt $collection.Count; $i++) {
-  $item = $installResult.GetUpdateResult($i)
-  $results += [pscustomobject]@{
-    Title = [string]$collection.Item($i).Title
-    ResultCode = [int]$item.ResultCode
-    HResult = [int]$item.HResult
-    RebootRequired = [bool]$item.RebootRequired
-  }
-}
-ConvertTo-Json -InputObject @($results) -Depth 4 -Compress
-"""
-
-
-def _run_powershell(script: str, timeout: int = 1800, env: dict[str, str] | None = None) -> str:
-    if platform.system() != "Windows":
-        raise DriverCatalogError("Каталог драйверов доступен только в Windows 10/11.")
-    import base64
-    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+def _request(url: str, data: bytes | None = None, timeout: int = 30) -> str:
+    request = urllib.request.Request(
+        url, data=data,
+        headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/json,*/*"},
+    )
     try:
-        result = subprocess.run(
-            ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=timeout, env=env,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise DriverCatalogError(f"Не удалось выполнить операцию с каталогом драйверов: {exc}") from exc
-    if result.returncode:
-        raise DriverCatalogError(result.stderr.strip() or result.stdout.strip() or "Ошибка службы каталога драйверов.")
-    return result.stdout.strip()
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            charset = response.headers.get_content_charset() or "utf-8"
+            return response.read().decode(charset, errors="replace")
+    except Exception as exc:
+        raise DriverCatalogError(f"Не удалось получить данные каталога драйверов: {exc}") from exc
+
+
+def _catalog_search(hardware_id: str) -> list[dict[str, str]]:
+    query = urllib.parse.urlencode({"q": hardware_id}).encode("utf-8")
+    page = _request(CATALOG_URL, query)
+    # Catalog rows expose update identity in the onclick download/details controls.
+    rows = re.findall(r'<tr[^>]*>(.*?)</tr>', page, flags=re.I | re.S)
+    found: list[dict[str, str]] = []
+    for row in rows:
+        plain = html.unescape(re.sub(r'<[^>]+>', ' ', row))
+        plain = re.sub(r'\\s+', ' ', plain).strip()
+        match = re.search(r"downloadDialog\\.aspx\\?[^'\" ]*updateID=([0-9a-fA-F-]{36})", row, re.I)
+        if not match:
+            match = re.search(r"updateID\\s*[:=]\\s*['\"]([0-9a-fA-F-]{36})", row, re.I)
+        if not match or not plain:
+            continue
+        found.append({"UpdateId": match.group(1), "Title": plain[:500]})
+    return found
+
+
+def _download_urls(update_id: str) -> list[str]:
+    url = "https://www.catalog.update.microsoft.com/DownloadDialog.aspx?" + urllib.parse.urlencode({"updateID": update_id})
+    page = _request(url)
+    urls = re.findall(r"https?://[^\\\"'<> ]+\\.(?:cab|zip)(?:\\?[^\\\"'<> ]*)?", html.unescape(page), re.I)
+    return list(dict.fromkeys(urls))
 
 
 def _hardware_match(candidate_ids: list[str], device_id: str) -> bool:
-    """Match a complete PnP hardware-ID component, not an arbitrary text prefix."""
     device = (device_id or "").strip().casefold()
     if not device:
         return False
     for raw_id in candidate_ids:
         candidate = str(raw_id or "").strip().casefold()
-        if not candidate or not device.startswith(candidate):
-            continue
-        if len(device) == len(candidate) or device[len(candidate)] in {"&", "\\"}:
-            return True
+        if candidate and device.startswith(candidate):
+            if len(device) == len(candidate) or device[len(candidate)] in {"&", "\\\\"}:
+                return True
     return False
 
 
 def search_driver_updates(devices: list[Any]) -> list[dict[str, Any]]:
-    """Find Microsoft Update driver offers and retain only exact PnP hardware-ID matches."""
-    raw = _run_powershell(_SEARCH_SCRIPT, timeout=900)
-    if not raw:
-        return []
-    try:
-        candidates = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise DriverCatalogError("Каталог вернул данные в неизвестном формате.") from exc
-    if isinstance(candidates, dict):
-        candidates = [candidates]
-    results = []
-    for candidate in candidates:
-        hardware_ids = candidate.get("HardwareIds") or []
-        if isinstance(hardware_ids, str):
-            hardware_ids = [hardware_ids]
-        matches = [
-            device for device in devices
-            if _hardware_match(hardware_ids, getattr(device, "device_id", ""))
-        ]
-        if not matches:
-            continue
-        candidate["MatchedDevices"] = [device.name for device in matches]
-        candidate["MatchedDeviceIds"] = [device.device_id for device in matches]
-        results.append(candidate)
-    return results
+    """Search the public web catalog directly; does not use Windows Update Agent/service."""
+    if platform.system() != "Windows":
+        raise DriverCatalogError("Поиск пакетов драйверов доступен в Windows 10/11.")
+    ids = list(dict.fromkeys(
+        str(getattr(device, "device_id", "")).strip()
+        for device in devices if str(getattr(device, "device_id", "")).strip()
+    ))
+    results: dict[str, dict[str, Any]] = {}
+    for hardware_id in ids:
+        for offer in _catalog_search(hardware_id):
+            offer_id = offer["UpdateId"]
+            offer["MatchedDevices"] = []
+            offer["MatchedDeviceIds"] = []
+            offer["HardwareIds"] = [hardware_id]
+            for device in devices:
+                if _hardware_match([hardware_id], getattr(device, "device_id", "")):
+                    offer["MatchedDevices"].append(device.name)
+                    offer["MatchedDeviceIds"].append(device.device_id)
+            results[offer_id] = offer
+    return list(results.values())
 
 
 def install_driver_updates(updates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Download catalog CAB/ZIP files over HTTPS, unpack INF packages and install via pnputil."""
+    if platform.system() != "Windows":
+        raise DriverCatalogError("Установка драйверов доступна только в Windows 10/11.")
     if not updates:
-        raise DriverCatalogError("Не выбраны обновления драйверов.")
-    identities = [{"UpdateId": item["UpdateId"], "Revision": int(item["Revision"])} for item in updates]
-    env = dict(__import__("os").environ)
-    env["DJSHREK_UPDATE_IDS"] = json.dumps(identities)
-    raw = _run_powershell(_INSTALL_SCRIPT, timeout=3600, env=env)
-    if not raw:
-        return []
-    try:
-        results = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise DriverCatalogError("Windows вернула некорректный отчёт установки.") from exc
-    return results if isinstance(results, list) else [results]
+        raise DriverCatalogError("Не выбраны драйверы для установки.")
+    results: list[dict[str, Any]] = []
+    with tempfile.TemporaryDirectory(prefix="DjShrekDrivers-") as temp:
+        root = Path(temp)
+        for index, update in enumerate(updates, start=1):
+            update_id = str(update.get("UpdateId", ""))
+            if not re.fullmatch(r"[0-9a-fA-F-]{36}", update_id):
+                raise DriverCatalogError("Каталог вернул некорректный идентификатор пакета.")
+            urls = _download_urls(update_id)
+            if not urls:
+                raise DriverCatalogError(f"Для пакета «{update.get('Title', update_id)}» каталог не предоставил прямую ссылку на CAB/ZIP.")
+            package_dir = root / str(index)
+            package_dir.mkdir()
+            downloaded = []
+            for n, url in enumerate(urls, start=1):
+                suffix = ".zip" if ".zip" in url.lower() else ".cab"
+                package = package_dir / f"package-{n}{suffix}"
+                request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+                try:
+                    with urllib.request.urlopen(request, timeout=120) as response, package.open("wb") as target:
+                        while chunk := response.read(1024 * 1024):
+                            target.write(chunk)
+                except Exception as exc:
+                    raise DriverCatalogError(f"Не удалось скачать пакет драйвера: {exc}") from exc
+                downloaded.append(package)
+            extracted = package_dir / "extracted"
+            extracted.mkdir()
+            for package in downloaded:
+                if package.suffix.lower() == ".zip":
+                    try:
+                        with zipfile.ZipFile(package) as archive:
+                            archive.extractall(extracted)
+                    except (OSError, zipfile.BadZipFile) as exc:
+                        raise DriverCatalogError(f"Повреждён ZIP-пакет: {exc}") from exc
+                else:
+                    command = ["expand.exe", "-F:*", str(package), str(extracted)]
+                    proc = subprocess.run(command, capture_output=True, text=True, timeout=180)
+                    if proc.returncode:
+                        raise DriverCatalogError(proc.stderr.strip() or "Не удалось распаковать CAB-пакет.")
+            inf_files = list(extracted.rglob("*.inf"))
+            if not inf_files:
+                raise DriverCatalogError(f"В пакете «{update.get('Title', update_id)}» не найден INF-файл драйвера.")
+            for inf in inf_files:
+                proc = subprocess.run(
+                    ["pnputil.exe", "/add-driver", str(inf), "/install"],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600,
+                )
+                if proc.returncode:
+                    raise DriverCatalogError(proc.stderr.strip() or f"pnputil не смог установить {inf.name}.")
+            results.append({"Title": update.get("Title", update_id), "ResultCode": 2,
+                             "HResult": 0, "RebootRequired": "restart" in (proc.stdout + proc.stderr).lower()})
+    return results
