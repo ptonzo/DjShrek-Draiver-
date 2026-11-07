@@ -70,7 +70,11 @@ def _catalog_search(hardware_id: str) -> list[dict[str, str]]:
         )
         date = next(
             (value for value in cell_text
-             if re.fullmatch(r"v?\d+(?:\.\d+){1,5}(?:[-+][A-Za-z0-9.-]+)?", value, re.I)),
+             if re.fullmatch(
+                 r"(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}|"
+                 r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})",
+                 value, re.I,
+             )),
             "",
         )
         found.append({"UpdateId": match.group(1), "Title": title[:500],
