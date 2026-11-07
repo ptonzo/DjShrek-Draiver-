@@ -15,7 +15,6 @@ from app.driver_backup import DriverBackupError, backup_driver_store, backup_sel
 from app.driver_catalog import DriverCatalogError, search_driver_updates, install_driver_updates
 from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot
 from app.driver_sources import source_for_device, open_official_source
-from app.vendor_utilities import detect_vendor_utilities, open_vendor_scan_page, scan_dell_updates
 from app.i18n import LANGUAGES, system_language, translate
 from app.updater import check_latest_release, download_and_schedule, UpdateError
 from app.registry_checker import RegistryFinding, scan_registry, repair_stale_startup_entry
@@ -76,21 +75,6 @@ class TelemetryWorker(QThread):
         try:
             self.completed.emit(collect_system_snapshot())
         except TelemetryError as exc:
-            self.failed.emit(str(exc))
-
-
-class DellScanWorker(QThread):
-    completed = Signal(object)
-    failed = Signal(str)
-
-    def __init__(self, executable: str, parent=None):
-        super().__init__(parent)
-        self.executable = executable
-
-    def run(self):
-        try:
-            self.completed.emit(scan_dell_updates(self.executable))
-        except RuntimeError as exc:
             self.failed.emit(str(exc))
 
 
@@ -208,9 +192,8 @@ class MainWindow(QMainWindow):
         self.build_junk_tab()
         self.build_settings_tab()
 
-        self.status = QLabel("Инициализация мониторинга…")
-        self.status.setObjectName("status")
-        layout.addWidget(self.status)
+        self.status = QLabel()  # Internal operation status; intentionally hidden.
+        self.status.hide()
         self.setCentralWidget(root)
         self.apply_language()
 
@@ -263,12 +246,6 @@ class MainWindow(QMainWindow):
         note.setObjectName("hint")
         note.setWordWrap(True)
         layout.addWidget(note)
-        layout.addWidget(self.section_label("ЖУРНАЛ СОБЫТИЙ"))
-        self.event_log = QPlainTextEdit()
-        self.event_log.setReadOnly(True)
-        self.event_log.setMaximumHeight(112)
-        self.event_log.appendPlainText("Панель управления запущена.")
-        layout.addWidget(self.event_log)
         layout.addStretch(1)
         self.tabs.addTab(tab, "Центр управления")
 
@@ -308,10 +285,7 @@ class MainWindow(QMainWindow):
         update_controls = QHBoxLayout()
         self.update_search_button = QPushButton("Проверить наличие обновлений драйверов")
         self.update_search_button.clicked.connect(self.start_update_search)
-        self.vendor_tools_button = QPushButton("Проверить утилиты Intel / AMD / Dell")
-        self.vendor_tools_button.clicked.connect(self.check_vendor_utilities)
-        update_controls.addWidget(self.update_search_button, 2)
-        update_controls.addWidget(self.vendor_tools_button, 1)
+        update_controls.addWidget(self.update_search_button, 1)
         update_layout.addLayout(update_controls)
         selection_controls = QHBoxLayout()
         self.select_all_updates_button = QPushButton("Выделить все")
@@ -357,8 +331,12 @@ class MainWindow(QMainWindow):
         self.registry_fix_button = QPushButton("Исправить выбранную ошибку")
         self.registry_fix_button.setEnabled(False)
         self.registry_fix_button.clicked.connect(self.fix_selected_registry_finding)
+        self.registry_delete_button = QPushButton("Удалить выбранное")
+        self.registry_delete_button.setEnabled(False)
+        self.registry_delete_button.clicked.connect(self.delete_selected_registry_finding)
         controls.addWidget(self.registry_scan_button)
         controls.addWidget(self.registry_fix_button)
+        controls.addWidget(self.registry_delete_button)
         layout.addLayout(controls)
         self.registry_table = QTableWidget(0, 5)
         self.registry_table.setHorizontalHeaderLabels(["Статус", "Раздел", "Имя записи", "Данные", "Результат проверки"])
@@ -393,9 +371,6 @@ class MainWindow(QMainWindow):
             f"Проверка завершена. Проверено разделов автозапуска: 4. Замечаний: {len(findings)}, "
             f"подтверждённых ошибок: {errors}. Реестр не изменялся."
         )
-        self.event_log.appendPlainText(
-            f"Проверка реестра: замечаний {len(findings)}, ошибок {errors}; изменений не выполнялось."
-        )
 
     def on_registry_scan_failed(self, message):
         self.status.setText("Проверка реестра не завершена.")
@@ -423,8 +398,10 @@ class MainWindow(QMainWindow):
 
     def on_registry_selection_changed(self):
         row = self.registry_table.currentRow()
-        can_fix = 0 <= row < len(self.registry_findings) and self.registry_findings[row].repairable
+        can_select = 0 <= row < len(self.registry_findings)
+        can_fix = can_select and self.registry_findings[row].repairable
         self.registry_fix_button.setEnabled(bool(can_fix))
+        self.registry_delete_button.setEnabled(bool(can_select and self.registry_findings[row].value_name))
 
     def fix_selected_registry_finding(self):
         row = self.registry_table.currentRow()
@@ -451,6 +428,31 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Исправление реестра", str(exc))
             return
         QMessageBox.information(self, "Исправление выполнено", f"Запись удалена. Резервная копия:\n{backup}")
+        self.start_registry_scan()
+
+    def delete_selected_registry_finding(self):
+        row = self.registry_table.currentRow()
+        if not (0 <= row < len(self.registry_findings)):
+            return
+        finding = self.registry_findings[row]
+        if not finding.value_name:
+            QMessageBox.information(self, "Удаление записи", "Выберите конкретную запись автозапуска, а не весь раздел.")
+            return
+        answer = QMessageBox.warning(
+            self, "Подтверждение удаления",
+            f"Удалить только выбранную запись автозапуска?\\n\\nРаздел: {finding.hive}\\\\{finding.subkey}\\nИмя: {finding.value_name}\\nДанные: {finding.value_data}\\n\\nПеред удалением будет создана резервная копия .reg.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            from app.registry_checker import delete_startup_entry
+            backup = delete_startup_entry(finding)
+        except (OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.critical(self, "Удаление записи", str(exc))
+            return
+        QMessageBox.information(self, "Удаление выполнено", f"Выбранная запись удалена. Резервная копия:\\n{backup}")
         self.start_registry_scan()
 
     def build_junk_tab(self):
@@ -774,7 +776,6 @@ class MainWindow(QMainWindow):
         }
         for key, value in values.items():
             self.info_labels[key].setText(value or "Не определено")
-        self.status.setText(f"Мониторинг обновлён · {snapshot.timestamp} · обновление каждые 2,5 секунды")
 
     def on_telemetry_failed(self, message: str):
         self.status.setText("Мониторинг недоступен: " + message)
@@ -1003,51 +1004,6 @@ class MainWindow(QMainWindow):
     def on_application_update_check_failed(self, message):
         # A failed optional update check must not interrupt normal program use.
         self.status.setText(f"Автопроверка обновления программы недоступна: {message}")
-
-    def check_vendor_utilities(self):
-        if sys.platform != "win32":
-            QMessageBox.information(self, "Официальные утилиты", "Проверка доступна только в Windows 10/11.")
-            return
-        utilities = detect_vendor_utilities()
-        installed = [item for item in utilities if item.installed]
-        missing = [item for item in utilities if not item.installed]
-        messages = []
-        for item in installed:
-            messages.append(f"✓ {item.name}: обнаружена")
-        for item in missing:
-            answer = QMessageBox.question(
-                self, "Официальная утилита не найдена",
-                f"{item.name} не обнаружена. Открыть официальный сайт производителя для загрузки и установки?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
-            )
-            if answer == QMessageBox.StandardButton.Yes:
-                open_vendor_scan_page(item.key)
-                messages.append(f"Открыт официальный сайт: {item.name}")
-            else:
-                messages.append(f"Пропущено: {item.name}")
-        for item in installed:
-            if item.key in ("intel", "amd"):
-                open_vendor_scan_page(item.key)
-                messages.append(f"Открыт официальный сканер: {item.name}")
-            elif item.key == "dell":
-                if item.executable:
-                    self.status.setText("Запуск официального сканирования Dell Command | Update…")
-                    self.vendor_tools_button.setEnabled(False)
-                    self.dell_scan_worker = DellScanWorker(item.executable, self)
-                    self.dell_scan_worker.completed.connect(self.on_dell_scan_finished)
-                    self.dell_scan_worker.failed.connect(self.on_dell_scan_failed)
-                    self.dell_scan_worker.finished.connect(lambda: self.vendor_tools_button.setEnabled(True))
-                    self.dell_scan_worker.start()
-                else:
-                    QMessageBox.information(
-                        self, "Dell Command | Update",
-                        "Утилита Dell обнаружена, но dcu-cli.exe не найден. Откройте Dell Command | Update вручную или выполните переустановку с официального сайта."
-                    )
-        if messages:
-            self.event_log.appendPlainText("\\n".join(messages))
-        if not any(item.key == "dell" and item.installed and item.executable for item in installed):
-            self.status.setText("Проверка OEM-утилит завершена. Intel/AMD открывают официальные страницы проверки; отсутствующие утилиты предложено загрузить.")
 
     def on_dell_scan_finished(self, updates):
         self.update_table.setRowCount(len(updates))
