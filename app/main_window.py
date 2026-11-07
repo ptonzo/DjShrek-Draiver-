@@ -963,6 +963,42 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, "Проверка драйверов", message)
 
 
+    def check_application_updates(self):
+        """Check GitHub Releases without blocking the interface."""
+        if getattr(self, "update_check_worker", None) is not None and self.update_check_worker.isRunning():
+            return
+        self.update_check_worker = UpdateCheckWorker(self)
+        self.update_check_worker.completed.connect(self.on_application_update_checked)
+        self.update_check_worker.failed.connect(self.on_application_update_check_failed)
+        self.update_check_worker.start()
+
+    def on_application_update_checked(self, update):
+        if not update:
+            return
+        version = update.get("version", "новая версия")
+        notes = update.get("notes", "").strip()
+        message = f"Доступна версия {version}.\n\n{notes}\n\nЗагрузить и установить обновление?"
+        answer = QMessageBox.question(
+            self, "Обновление DjShrek Draiver", message,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            download_and_schedule(update)
+            QMessageBox.information(
+                self, "Обновление подготовлено",
+                "Пакет обновления загружен и проверен. Программа закроется для установки.",
+            )
+            QApplication.quit()
+        except UpdateError as exc:
+            QMessageBox.warning(self, "Не удалось обновить программу", str(exc))
+
+    def on_application_update_check_failed(self, message):
+        # A failed optional update check must not interrupt normal program use.
+        self.status.setText(f"Автопроверка обновления программы недоступна: {message}")
+
     def check_vendor_utilities(self):
         if sys.platform != "win32":
             QMessageBox.information(self, "Официальные утилиты", "Проверка доступна только в Windows 10/11.")
