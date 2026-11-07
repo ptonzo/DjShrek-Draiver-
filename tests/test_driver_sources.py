@@ -49,7 +49,7 @@ def test_catalog_html_extracts_update_identity(monkeypatch):
     page = f'<table><tr><td>Graphics Driver</td><a href="DownloadDialog.aspx?updateID={update_id}&amp;foo=1">Download</a></tr></table>'
     monkeypatch.setattr(driver_catalog, "_request", lambda *args, **kwargs: page)
     rows = driver_catalog._catalog_search(r"PCI\\VEN_10DE")
-    assert rows == [{"UpdateId": update_id, "Title": "Graphics Driver Download"}]
+    assert rows == [{"UpdateId": update_id, "Title": "Graphics Driver Download", "Version": "", "Date": ""}]
 
 
 def test_search_does_not_require_windows_update_agent(monkeypatch):
