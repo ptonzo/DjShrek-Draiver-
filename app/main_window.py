@@ -30,6 +30,17 @@ class ScanWorker(QThread):
             self.failed.emit(str(exc))
 
 
+class RegistryScanWorker(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def run(self):
+        try:
+            self.completed.emit(scan_registry())
+        except OSError as exc:
+            self.failed.emit(str(exc))
+
+
 class TelemetryWorker(QThread):
     completed = Signal(object)
     failed = Signal(str)
@@ -303,6 +314,11 @@ class MainWindow(QMainWindow):
         update_controls.addWidget(self.update_search_button, 2)
         update_controls.addWidget(self.vendor_tools_button, 1)
         update_layout.addLayout(update_controls)
+        selection_controls = QHBoxLayout()
+        self.select_all_updates_button = QPushButton("Выделить все")
+        self.select_all_updates_button.clicked.connect(self.select_all_update_rows)
+        selection_controls.addWidget(self.select_all_updates_button)
+        update_layout.addLayout(selection_controls)
         self.update_table = QTableWidget(0, 4)
         self.update_table.setHorizontalHeaderLabels([
             "Выбрать", "Устройство", "Версия драйвера", "Дата драйвера"
@@ -389,26 +405,33 @@ class MainWindow(QMainWindow):
         if sys.platform != "win32":
             QMessageBox.information(self, "Проверка реестра", "Функция доступна только в Windows 10/11.")
             return
+        if getattr(self, "registry_worker", None) is not None and self.registry_worker.isRunning():
+            return
         self.registry_scan_button.setEnabled(False)
         self.registry_fix_button.setEnabled(False)
         self.registry_table.setRowCount(0)
         self.status.setText("Проверка записей автозапуска Windows…")
-        try:
-            self.registry_findings = scan_registry()
-        except OSError as exc:
-            self.registry_scan_button.setEnabled(True)
-            QMessageBox.warning(self, "Проверка реестра", str(exc))
-            return
+        self.registry_worker = RegistryScanWorker(self)
+        self.registry_worker.completed.connect(self.on_registry_scan_finished)
+        self.registry_worker.failed.connect(self.on_registry_scan_failed)
+        self.registry_worker.finished.connect(lambda: self.registry_scan_button.setEnabled(True))
+        self.registry_worker.start()
+
+    def on_registry_scan_finished(self, findings):
+        self.registry_findings = findings
         self.render_registry_findings()
-        self.registry_scan_button.setEnabled(True)
-        errors = sum(1 for item in self.registry_findings if item.severity == "Ошибка")
+        errors = sum(1 for item in findings if item.severity == "Ошибка")
         self.status.setText(
-            f"Проверка завершена. Найдено замечаний: {len(self.registry_findings)}, "
+            f"Проверка завершена. Проверено разделов автозапуска: 4. Замечаний: {len(findings)}, "
             f"подтверждённых ошибок: {errors}. Реестр не изменялся."
         )
         self.event_log.appendPlainText(
-            f"Проверка реестра: замечаний {len(self.registry_findings)}, ошибок {errors}; изменений не выполнялось."
+            f"Проверка реестра: замечаний {len(findings)}, ошибок {errors}; изменений не выполнялось."
         )
+
+    def on_registry_scan_failed(self, message):
+        self.status.setText("Проверка реестра не завершена.")
+        QMessageBox.warning(self, "Проверка реестра", message)
 
     def render_registry_findings(self):
         self.registry_table.setRowCount(len(self.registry_findings))
@@ -829,6 +852,12 @@ class MainWindow(QMainWindow):
         )
         if not devices:
             QMessageBox.information(self, "Драйверы", "Устройства не обнаружены.")
+
+    def select_all_update_rows(self):
+        for row in range(self.update_table.rowCount()):
+            item = self.update_table.item(row, 0)
+            if item is not None:
+                item.setCheckState(Qt.CheckState.Checked)
 
     def on_update_error(self, message):
         self.status.setText("Проверка официальных источников не завершена.")
