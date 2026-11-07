@@ -214,36 +214,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self.apply_language()
 
-        self.setStyleSheet("""
-            QMainWindow { background: #070812; }
-            QWidget { color: #f2f0ff; font-size: 10pt; }
-            QLabel#title { font-size: 27pt; font-weight: 900; color: #ffffff; }
-            QLabel#subtitle { color: #00e5ff; font-size: 9pt; font-weight: 900; letter-spacing: 2px; }
-            QLabel#status { color: #c4b5fd; padding: 9px 12px; background: #111225; border: 1px solid #51358b; border-radius: 8px; }
-            QLabel#hint { color: #b7b5d8; padding: 8px 2px; }
-            QLabel#metricHeading { color: #a78bfa; font-size: 8pt; font-weight: 900; }
-            QLabel#metricValue { color: #ffffff; font-size: 23pt; font-weight: 900; }
-            QLabel#metricDetail { color: #a7b7d7; font-size: 9pt; }
-            QLabel#sectionTitle { color: #d7c5ff; font-size: 13pt; font-weight: 900; padding: 5px 0; }
-            QFrame#metricCard, QFrame#infoCard { background: #101326; border: 1px solid #493274; border-radius: 11px; }
-            QLineEdit, QTableWidget, QPlainTextEdit, QComboBox { background: #0e1222; border: 1px solid #34365c; border-radius: 8px; padding: 9px; color: #f2f0ff; selection-background-color: #6d42bd; }
-            QComboBox QAbstractItemView { background: #151a30; color: #f2f0ff; selection-background-color: #7048b8; selection-color: #ffffff; border: 1px solid #7048b8; outline: 0; }
-            QMessageBox { background: #101326; }
-            QMessageBox QLabel { color: #f2f0ff; min-width: 360px; }
-            QLineEdit:focus { border: 1px solid #00e5ff; }
-            QHeaderView::section { background: #1b1c36; color: #d7c5ff; padding: 10px; border: 0; border-bottom: 1px solid #7048b8; font-weight: 800; }
-            QTableWidget { alternate-background-color: #151a30; gridline-color: #2d3150; }
-            QPushButton { background: #7444c8; color: #ffffff; border: 1px solid #9b70f0; border-radius: 8px; padding: 11px 15px; font-weight: 900; }
-            QPushButton:hover { background: #00a9c7; border-color: #00e5ff; color: #071018; }
-            QPushButton:pressed { background: #4e2c91; }
-            QPushButton:disabled { background: #292943; color: #8585a8; border-color: #393958; }
-            QProgressBar { background: #1b2038; border: 0; border-radius: 4px; height: 8px; }
-            QProgressBar::chunk { background: #00e5ff; border-radius: 4px; }
-            QTabWidget::pane { border: 1px solid #493274; border-radius: 10px; top: -1px; background: #0b0e1b; }
-            QTabBar::tab { background: #14162a; color: #a8a5c9; padding: 12px 20px; margin-right: 4px; border-top-left-radius: 8px; border-top-right-radius: 8px; }
-            QTabBar::tab:selected { background: #30204e; color: #ffffff; border-bottom: 3px solid #00e5ff; }
-            QTabBar::tab:hover { color: #00e5ff; }
-        """)
+        self.apply_theme()
 
         self.telemetry_timer = QTimer(self)
         self.telemetry_timer.setInterval(2500)
@@ -630,22 +601,95 @@ class MainWindow(QMainWindow):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.addWidget(self.section_label("Настройки"))
-        row = QHBoxLayout()
-        label = QLabel("Язык интерфейса")
+        language_row = QHBoxLayout()
+        language_label = QLabel("Язык интерфейса")
         self.language_combo = QComboBox()
         for code, native_name in LANGUAGES.items():
             self.language_combo.addItem(native_name, code)
         index = self.language_combo.findData(self.language)
         self.language_combo.setCurrentIndex(max(0, index))
         self.language_combo.currentIndexChanged.connect(self.change_language)
-        row.addWidget(label)
-        row.addWidget(self.language_combo, 1)
-        layout.addLayout(row)
-        hint = QLabel("Изменение языка применяется сразу.")
+        language_row.addWidget(language_label)
+        language_row.addWidget(self.language_combo, 1)
+        layout.addLayout(language_row)
+
+        theme_row = QHBoxLayout()
+        theme_label = QLabel("Внешний вид интерфейса")
+        self.theme_combo = QComboBox()
+        for theme_id, theme_name, *_ in self.THEMES:
+            self.theme_combo.addItem(f"№{theme_id} — {theme_name}", theme_id)
+        selected_theme = self.settings_store.value("theme", "1", type=str)
+        if selected_theme not in {item[0] for item in self.THEMES}:
+            selected_theme = "1"
+        self.theme_combo.setCurrentIndex(max(0, self.theme_combo.findData(selected_theme)))
+        self.theme_combo.currentIndexChanged.connect(self.change_theme)
+        theme_row.addWidget(theme_label)
+        theme_row.addWidget(self.theme_combo, 1)
+        layout.addLayout(theme_row)
+        hint = QLabel("Язык и оформление применяются сразу. При первой установке используется интерфейс №1 — Игровой Neon Gaming. Выбранное оформление сохраняется для следующих запусков.")
         hint.setObjectName("hint")
+        hint.setWordWrap(True)
         layout.addWidget(hint)
         layout.addStretch(1)
         self.tabs.addTab(tab, "Настройки")
+
+    def change_theme(self, index):
+        theme_id = self.theme_combo.itemData(index)
+        if theme_id not in {item[0] for item in self.THEMES}:
+            return
+        self.settings_store.setValue("theme", theme_id)
+        self.apply_theme(theme_id)
+
+    THEMES = [
+        ("1", "Игровой Neon Gaming", "#070812", "#f2f0ff", "#7444c8", "#00e5ff", "#101326", "#1b1c36"),
+        ("2", "Современный Glass / Windows 11", "#eaf3ff", "#14233b", "#1769d2", "#37a4ff", "#ffffff", "#dceaff"),
+        ("3", "Минималистичный Pro", "#101820", "#e7f0f5", "#287a49", "#75d69a", "#17232d", "#263943"),
+        ("4", "Техно / Инженерный", "#080b0f", "#f3eee5", "#d87916", "#ffae35", "#151a20", "#292f36"),
+        ("5", "Тёмный профессиональный", "#071426", "#e8f2ff", "#087fc4", "#36c6ff", "#10233a", "#1a3450"),
+        ("6", "RGB Gaming", "#080910", "#f7f4ff", "#b32bda", "#27e6c1", "#141326", "#29213d"),
+        ("7", "Классический удобный", "#e8edf4", "#182333", "#16803b", "#55b86a", "#ffffff", "#d7e0eb"),
+        ("8", "Светлый / Чистый", "#f4f7fb", "#18263a", "#1265c8", "#2d9be8", "#ffffff", "#e6edf6"),
+        ("9", "Киберпанк", "#10051b", "#ffeaff", "#ed25c8", "#00eaff", "#210d2d", "#3b1648"),
+        ("10", "HUD / Мониторинг + драйверы", "#041319", "#dcfbff", "#008d9c", "#00e5ff", "#0b2229", "#143a43")
+    ]
+
+    def apply_theme(self, theme_id=None):
+        theme_id = str(theme_id or self.settings_store.value("theme", "1", type=str))
+        selected = next((item for item in self.THEMES if item[0] == theme_id), self.THEMES[0])
+        _, _, bg, fg, accent, highlight, panel, header = selected
+        light = theme_id in {"2", "7", "8"}
+        muted = "#50627a" if light else "#a7b7d7"
+        border = "#b8cce5" if light else accent
+        self.setStyleSheet(f"""
+            QMainWindow {{ background: {bg}; }}
+            QWidget {{ color: {fg}; font-size: 10pt; }}
+            QLabel#title {{ font-size: 27pt; font-weight: 900; color: {fg}; }}
+            QLabel#subtitle {{ color: {highlight}; font-size: 9pt; font-weight: 900; letter-spacing: 2px; }}
+            QLabel#status {{ color: {fg}; padding: 9px 12px; background: {panel}; border: 1px solid {border}; border-radius: 8px; }}
+            QLabel#hint {{ color: {muted}; padding: 8px 2px; }}
+            QLabel#metricHeading {{ color: {accent}; font-size: 8pt; font-weight: 900; }}
+            QLabel#metricValue {{ color: {fg}; font-size: 23pt; font-weight: 900; }}
+            QLabel#metricDetail {{ color: {muted}; font-size: 9pt; }}
+            QLabel#sectionTitle {{ color: {fg}; font-size: 13pt; font-weight: 900; padding: 5px 0; }}
+            QFrame#metricCard, QFrame#infoCard {{ background: {panel}; border: 1px solid {border}; border-radius: 11px; }}
+            QLineEdit, QTableWidget, QPlainTextEdit, QComboBox {{ background: {panel}; border: 1px solid {border}; border-radius: 8px; padding: 9px; color: {fg}; selection-background-color: {accent}; }}
+            QComboBox QAbstractItemView {{ background: {panel}; color: {fg}; selection-background-color: {accent}; selection-color: #ffffff; border: 1px solid {border}; outline: 0; }}
+            QMessageBox {{ background: {panel}; }}
+            QMessageBox QLabel {{ color: {fg}; min-width: 360px; }}
+            QLineEdit:focus, QComboBox:focus {{ border: 1px solid {highlight}; }}
+            QHeaderView::section {{ background: {header}; color: {fg}; padding: 10px; border: 0; border-bottom: 1px solid {accent}; font-weight: 800; }}
+            QTableWidget {{ alternate-background-color: {header}; gridline-color: {border}; }}
+            QPushButton {{ background: {accent}; color: #ffffff; border: 1px solid {highlight}; border-radius: 8px; padding: 11px 15px; font-weight: 900; }}
+            QPushButton:hover {{ background: {highlight}; border-color: {highlight}; color: #ffffff; }}
+            QPushButton:pressed {{ background: {accent}; }}
+            QPushButton:disabled {{ background: {header}; color: {muted}; border-color: {border}; }}
+            QProgressBar {{ background: {header}; border: 0; border-radius: 4px; height: 8px; }}
+            QProgressBar::chunk {{ background: {highlight}; border-radius: 4px; }}
+            QTabWidget::pane {{ border: 1px solid {border}; border-radius: 10px; top: -1px; background: {panel}; }}
+            QTabBar::tab {{ background: {header}; color: {muted}; padding: 12px 20px; margin-right: 4px; border-top-left-radius: 8px; border-top-right-radius: 8px; }}
+            QTabBar::tab:selected {{ background: {accent}; color: #ffffff; border-bottom: 3px solid {highlight}; }}
+            QTabBar::tab:hover {{ color: {highlight}; }}
+        """)
 
     def change_language(self, index):
         code = self.language_combo.itemData(index)
