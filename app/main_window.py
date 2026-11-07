@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSettings
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
-    QWidget, QHeaderView, QTabWidget, QGridLayout, QProgressBar, QFrame, QPlainTextEdit, QComboBox,
+    QWidget, QHeaderView, QTabWidget, QGridLayout, QProgressBar, QFrame, QComboBox,
 )
 from app.export import export_devices_csv
 from app.scanner import Device, ScanError, scan_devices
@@ -1003,29 +1003,6 @@ class MainWindow(QMainWindow):
     def on_application_update_check_failed(self, message):
         # A failed optional update check must not interrupt normal program use.
         self.status.setText(f"Автопроверка обновления программы недоступна: {message}")
-
-    def on_dell_scan_finished(self, updates):
-        self.update_table.setRowCount(len(updates))
-        for row, update in enumerate(updates):
-            values = [
-                update.get("title", "Обновление Dell"),
-                "Dell",
-                update.get("version") or "См. отчёт Dell",
-                update.get("date") or "Не указана",
-                "Dell Command | Update",
-                "Официальный CLI: проверено",
-            ]
-            for col, value in enumerate(values):
-                self.update_table.setItem(row, col, QTableWidgetItem(value))
-        self.update_table.resizeRowsToContents()
-        self.status.setText(
-            f"Dell Command | Update завершил проверку. Записей в отчёте: {len(updates)}. "
-            "Применение обновлений не запускалось."
-        )
-
-    def on_dell_scan_failed(self, message):
-        self.status.setText("Сканирование Dell Command | Update не завершено.")
-        QMessageBox.warning(self, "Dell Command | Update", message)
 
 
 def main():
