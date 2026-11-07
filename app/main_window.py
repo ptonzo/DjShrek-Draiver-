@@ -201,7 +201,7 @@ class MainWindow(QMainWindow):
             self.devices = list(initial_devices)
             self.render_devices()
         if initial_updates is not None:
-            self.on_catalog_updates_found(list(initial_updates))
+            self.on_catalog_updates_found(list(initial_updates), show_notice=False)
 
         self.telemetry_timer = QTimer(self)
         self.telemetry_timer.setInterval(2500)
@@ -884,7 +884,7 @@ class MainWindow(QMainWindow):
         self.catalog_worker.failed.connect(self.on_update_error)
         self.catalog_worker.start()
 
-    def on_catalog_updates_found(self, updates):
+    def on_catalog_updates_found(self, updates, show_notice=True):
         self.available_driver_updates = updates
         self.update_table.setRowCount(len(updates))
         for row, update in enumerate(updates):
@@ -905,7 +905,7 @@ class MainWindow(QMainWindow):
                 self.update_table.setItem(row, col, item)
         self.update_table.resizeRowsToContents()
         self.status.setText(f"Веб-каталог: найдено совпадений по Hardware ID — {len(updates)}. Обычный Windows Update не запускался.")
-        if not updates:
+        if not updates and show_notice:
             QMessageBox.information(self, "Проверка драйверов", "В веб-каталоге не найдено пакетов, совпадающих с идентификаторами оборудования. Установленные драйверы не изменялись.")
 
     def select_all_update_rows(self):
