@@ -587,9 +587,6 @@ class MainWindow(QMainWindow):
             f"Удалено: {result.deleted_files} файлов · освобождено: {self.format_bytes(result.freed_bytes)} · "
             f"пропущено: {result.skipped_files}"
         )
-            f"Очистка временных файлов: удалено {result.deleted_files}, освобождено {self.format_bytes(result.freed_bytes)}, "
-            f"пропущено {result.skipped_files}."
-        )
         if result.errors:
             QMessageBox.warning(self, "Очистка завершена с замечаниями", "\n".join(result.errors[:10]))
         self.start_junk_scan()
