@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+from datetime import datetime
 from datetime import datetime
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSettings
 from PySide6.QtWidgets import (
@@ -10,7 +12,8 @@ from PySide6.QtWidgets import (
 )
 from app.export import export_devices_csv
 from app.scanner import Device, ScanError, scan_devices
-from app.driver_backup import DriverBackupError, backup_driver_store, restore_driver_store
+from app.driver_backup import DriverBackupError, backup_driver_store, backup_selected_driver_packages, restore_driver_store
+from app.driver_catalog import DriverCatalogError, search_driver_updates, install_driver_updates
 from app.telemetry import TelemetryError, collect_system_snapshot, SystemSnapshot
 from app.driver_sources import source_for_device, open_official_source
 from app.vendor_utilities import detect_vendor_utilities, open_vendor_scan_page, scan_dell_updates
@@ -27,6 +30,32 @@ class ScanWorker(QThread):
         try:
             self.completed.emit(scan_devices())
         except ScanError as exc:
+            self.failed.emit(str(exc))
+
+
+class CatalogSearchWorker(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+    def __init__(self, devices, parent=None):
+        super().__init__(parent)
+        self.devices = devices
+    def run(self):
+        try:
+            self.completed.emit(search_driver_updates(self.devices))
+        except DriverCatalogError as exc:
+            self.failed.emit(str(exc))
+
+
+class DriverInstallWorker(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+    def __init__(self, updates, parent=None):
+        super().__init__(parent)
+        self.updates = updates
+    def run(self):
+        try:
+            self.completed.emit(install_driver_updates(self.updates))
+        except DriverCatalogError as exc:
             self.failed.emit(str(exc))
 
 
@@ -318,10 +347,13 @@ class MainWindow(QMainWindow):
         self.select_all_updates_button = QPushButton("Выделить все")
         self.select_all_updates_button.clicked.connect(self.select_all_update_rows)
         selection_controls.addWidget(self.select_all_updates_button)
+        self.update_install_button = QPushButton("Создать резервную копию и обновить выбранные")
+        self.update_install_button.clicked.connect(self.update_selected_drivers)
+        selection_controls.addWidget(self.update_install_button)
         update_layout.addLayout(selection_controls)
-        self.update_table = QTableWidget(0, 4)
+        self.update_table = QTableWidget(0, 5)
         self.update_table.setHorizontalHeaderLabels([
-            "Выбрать", "Устройство", "Версия драйвера", "Дата драйвера"
+            "Выбрать", "Устройство", "Доступный драйвер", "Версия", "Дата"
         ])
         self.configure_table(self.update_table)
         update_layout.addWidget(self.update_table, 1)
@@ -675,7 +707,7 @@ class MainWindow(QMainWindow):
             self.tabs.setTabText(i, translate(self.language, source))
         table_headers = [
             (self.device_table, self.device_headers),
-            (self.update_table, ["Выбрать", "Устройство", "Версия драйвера", "Дата драйвера"]),
+            (self.update_table, ["Выбрать", "Устройство", "Доступный драйвер", "Версия", "Дата"]),
         ]
         for table, headers in table_headers:
             for col, source in enumerate(headers):
@@ -817,41 +849,50 @@ class MainWindow(QMainWindow):
 
     def start_update_search(self):
         if sys.platform != "win32":
-            QMessageBox.information(self, "Драйверы", "Проверка доступна только в Windows 10/11.")
+            QMessageBox.information(self, "Драйверы", "Каталог драйверов доступен только в Windows 10/11.")
             return
         if self.update_worker is not None and self.update_worker.isRunning():
             return
         self.update_search_button.setEnabled(False)
-        self.status.setText("Сканирование установленных драйверов и определение официальных источников…")
+        self.status.setText("Сканирование устройств и поиск совместимых драйверов в Microsoft Update Catalog…")
         self.update_worker = ScanWorker(self)
-        self.update_worker.completed.connect(self.on_updates_found)
+        self.update_worker.completed.connect(self.on_devices_for_catalog)
         self.update_worker.failed.connect(self.on_update_error)
         self.update_worker.finished.connect(lambda: self.update_search_button.setEnabled(True))
         self.update_worker.start()
 
-    def on_updates_found(self, devices):
+    def on_devices_for_catalog(self, devices):
         self.devices = devices
         self.render_devices()
-        self.update_table.setRowCount(len(devices))
-        for row, device in enumerate(devices):
+        self.status.setText("Устройства найдены. Запрос каталога Microsoft Update…")
+        self.catalog_worker = CatalogSearchWorker(devices, self)
+        self.catalog_worker.completed.connect(self.on_catalog_updates_found)
+        self.catalog_worker.failed.connect(self.on_update_error)
+        self.catalog_worker.start()
+
+    def on_catalog_updates_found(self, updates):
+        self.available_driver_updates = updates
+        self.update_table.setRowCount(len(updates))
+        for row, update in enumerate(updates):
             choice = QTableWidgetItem()
             choice.setFlags(choice.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
             choice.setCheckState(Qt.CheckState.Unchecked)
-            choice.setData(Qt.ItemDataRole.UserRole, device)
+            choice.setData(Qt.ItemDataRole.UserRole, update)
             self.update_table.setItem(row, 0, choice)
-            for col, value in enumerate([
-                device.name, device.driver_version or "Нет данных", device.driver_date or "Нет данных"
-            ], start=1):
-                item = QTableWidgetItem(value)
-                item.setToolTip(value)
+            values = [
+                ", ".join(update.get("MatchedDevices", [])),
+                update.get("Title", "Драйвер Microsoft"),
+                update.get("Version") or "Версия не указана",
+                update.get("Date") or "Дата не указана",
+            ]
+            for col, value in enumerate(values, start=1):
+                item = QTableWidgetItem(str(value))
+                item.setToolTip(str(value))
                 self.update_table.setItem(row, col, item)
         self.update_table.resizeRowsToContents()
-        self.status.setText(
-            f"Проверено устройств: {len(devices)}. Версии и даты считаны из подписанных драйверов Windows. "
-            "Наличие новой версии подтверждается на сайте производителя."
-        )
-        if not devices:
-            QMessageBox.information(self, "Драйверы", "Устройства не обнаружены.")
+        self.status.setText(f"Каталог Microsoft Update: найдено совместимых предложений драйверов — {len(updates)}. Обычный Windows Update не запускался.")
+        if not updates:
+            QMessageBox.information(self, "Проверка драйверов", "В каталоге Microsoft не найдено новых предложений, точно совпадающих с идентификаторами оборудования. Установленные драйверы не изменялись.")
 
     def select_all_update_rows(self):
         for row in range(self.update_table.rowCount()):
@@ -859,8 +900,57 @@ class MainWindow(QMainWindow):
             if item is not None:
                 item.setCheckState(Qt.CheckState.Checked)
 
+    def update_selected_drivers(self):
+        selected = []
+        for row in range(self.update_table.rowCount()):
+            item = self.update_table.item(row, 0)
+            if item is not None and item.checkState() == Qt.CheckState.Checked:
+                update = item.data(Qt.ItemDataRole.UserRole)
+                if update:
+                    selected.append(update)
+        if not selected:
+            QMessageBox.information(self, "Обновление драйверов", "Сначала отметьте драйверы для обновления.")
+            return
+        inf_names = []
+        for update in selected:
+            for device_id in update.get("MatchedDeviceIds", []):
+                device = next((d for d in self.devices if d.device_id == device_id), None)
+                if device and device.inf_name:
+                    inf_names.append(device.inf_name)
+        if not inf_names:
+            QMessageBox.warning(self, "Обновление драйверов", "Windows не предоставила INF-имена текущих выбранных драйверов. Без подтверждённой резервной копии установка отменена.")
+            return
+        backup_root = Path.home() / "AppData" / "Local" / "DjShrek" / "DriverBackups"
+        backup_root.mkdir(parents=True, exist_ok=True)
+        backup_folder = backup_root / datetime.now().strftime("%Y%m%d-%H%M%S")
+        try:
+            backup_folder.mkdir()
+            backup_selected_driver_packages(sorted(set(inf_names)), backup_folder)
+        except (DriverBackupError, OSError) as exc:
+            QMessageBox.critical(self, "Резервная копия", f"Не удалось сохранить выбранные драйверы. Установка отменена.\n\n{exc}")
+            return
+        self.status.setText(f"Резервная копия выбранных драйверов создана: {backup_folder}. Загрузка и установка…")
+        self.update_install_button.setEnabled(False)
+        self.install_worker = DriverInstallWorker(selected, self)
+        self.install_worker.completed.connect(self.on_driver_install_finished)
+        self.install_worker.failed.connect(self.on_driver_install_failed)
+        self.install_worker.finished.connect(lambda: self.update_install_button.setEnabled(True))
+        self.install_worker.start()
+
+    def on_driver_install_finished(self, results):
+        success = sum(1 for result in results if result.get("ResultCode") == 2)
+        reboot = any(result.get("RebootRequired") for result in results)
+        self.status.setText(f"Установка завершена: успешно — {success} из {len(results)}. " + ("Требуется перезагрузка Windows." if reboot else "Перезагрузка не запрошена."))
+        details = "\n".join(f"{item.get('Title', 'Драйвер')}: код {item.get('ResultCode')}, HRESULT {item.get('HResult')}" for item in results)
+        QMessageBox.information(self, "Результат обновления драйверов", details or "Windows вернула пустой отчёт.")
+        self.start_update_search()
+
+    def on_driver_install_failed(self, message):
+        self.status.setText("Обновление драйверов не завершено.")
+        QMessageBox.critical(self, "Ошибка обновления драйверов", message)
+
     def on_update_error(self, message):
-        self.status.setText("Проверка официальных источников не завершена.")
+        self.status.setText("Проверка каталога драйверов не завершена.")
         QMessageBox.warning(self, "Проверка драйверов", message)
 
 
