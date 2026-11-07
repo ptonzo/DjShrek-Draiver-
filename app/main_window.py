@@ -440,7 +440,7 @@ class MainWindow(QMainWindow):
             return
         answer = QMessageBox.warning(
             self, "Подтверждение удаления",
-            f"Удалить только выбранную запись автозапуска?\\n\\nРаздел: {finding.hive}\\\\{finding.subkey}\\nИмя: {finding.value_name}\\nДанные: {finding.value_data}\\n\\nПеред удалением будет создана резервная копия .reg.",
+            f"Удалить только выбранную запись автозапуска?\n\nРаздел: {finding.hive}\\\\{finding.subkey}\nИмя: {finding.value_name}\nДанные: {finding.value_data}\n\nПеред удалением будет создана резервная копия .reg.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )
@@ -452,7 +452,7 @@ class MainWindow(QMainWindow):
         except (OSError, RuntimeError, ValueError) as exc:
             QMessageBox.critical(self, "Удаление записи", str(exc))
             return
-        QMessageBox.information(self, "Удаление выполнено", f"Выбранная запись удалена. Резервная копия:\\n{backup}")
+        QMessageBox.information(self, "Удаление выполнено", f"Выбранная запись удалена. Резервная копия:\n{backup}")
         self.start_registry_scan()
 
     def build_junk_tab(self):
@@ -587,7 +587,6 @@ class MainWindow(QMainWindow):
             f"Удалено: {result.deleted_files} файлов · освобождено: {self.format_bytes(result.freed_bytes)} · "
             f"пропущено: {result.skipped_files}"
         )
-        self.event_log.appendPlainText(
             f"Очистка временных файлов: удалено {result.deleted_files}, освобождено {self.format_bytes(result.freed_bytes)}, "
             f"пропущено {result.skipped_files}."
         )
@@ -1023,7 +1022,6 @@ class MainWindow(QMainWindow):
             f"Dell Command | Update завершил проверку. Записей в отчёте: {len(updates)}. "
             "Применение обновлений не запускалось."
         )
-        self.event_log.appendPlainText(f"Dell Command | Update: найдено записей отчёта — {len(updates)}.")
 
     def on_dell_scan_failed(self, message):
         self.status.setText("Сканирование Dell Command | Update не завершено.")
