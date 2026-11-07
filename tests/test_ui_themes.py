@@ -21,13 +21,13 @@ def test_first_run_defaults_to_neon_gaming(tmp_path):
     window = MainWindow()
     try:
         assert window.theme_combo.currentData() == "1"
-        assert len(window.THEMES) == 10
+        assert len(window.THEMES) == 12
     finally:
         window.close()
         settings.clear()
 
 
-def test_all_ten_themes_can_be_selected_and_persisted(tmp_path):
+def test_all_twelve_themes_can_be_selected_and_persisted(tmp_path):
     _app()
     QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, str(tmp_path))
     QSettings.setDefaultFormat(QSettings.Format.IniFormat)
@@ -35,7 +35,7 @@ def test_all_ten_themes_can_be_selected_and_persisted(tmp_path):
     settings.clear()
     window = MainWindow()
     try:
-        assert window.theme_combo.count() == 10
+        assert window.theme_combo.count() == 12
         for index in range(window.theme_combo.count()):
             window.theme_combo.setCurrentIndex(index)
             theme_id = window.theme_combo.itemData(index)
