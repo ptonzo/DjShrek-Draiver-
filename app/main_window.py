@@ -621,6 +621,9 @@ class MainWindow(QMainWindow):
         selected_theme = self.settings_store.value("theme", "1", type=str)
         if selected_theme not in {item[0] for item in self.THEMES}:
             selected_theme = "1"
+        # Persist the first-run default too: setting the already-active
+        # first item does not emit currentIndexChanged in Qt.
+        self.settings_store.setValue("theme", selected_theme)
         self.theme_combo.setCurrentIndex(max(0, self.theme_combo.findData(selected_theme)))
         self.theme_combo.currentIndexChanged.connect(self.change_theme)
         theme_row.addWidget(theme_label)
